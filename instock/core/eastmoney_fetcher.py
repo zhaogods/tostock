@@ -28,25 +28,20 @@ class eastmoney_fetcher:
     def _get_cookie(self):
         """
         获取东方财富网的Cookie
-        优先级：环境变量 > 文件 > 默认Cookie
+        优先级：环境变量 > 文件
         """
-        # 1. 尝试从环境变量获取
         cookie = os.environ.get('EAST_MONEY_COOKIE')
         if cookie:
-            # print("环境变量中的Cookie: 已设置")
             return cookie
 
-        # 2. 尝试从文件获取
         cookie_file = Path(os.path.join(self.base_dir, 'config', 'eastmoney_cookie.txt'))
         if cookie_file.exists():
             with open(cookie_file, 'r') as f:
                 cookie = f.read().strip()
             if cookie:
-                # print("文件中的Cookie: 已设置")
                 return cookie
 
-        # 3. 默认Cookie（可能过期，仅作为备选）
-        return 'st_si=78948464251292; st_psi=20260205091253851-119144370567-1089607836; st_pvi=07789985376191; st_sp=2026-02-05%2009%3A11%3A13; st_inirUrl=https%3A%2F%2Fxuangu.eastmoney.com%2FResult; st_sn=12; st_asi=20260205091253851-119144370567-1089607836-webznxg.dbssk.qxg-1'
+        return None
 
     def _create_session(self):
         """创建并配置会话"""
@@ -79,8 +74,9 @@ class eastmoney_fetcher:
             'Connection': 'keep-alive',
         }
         session.headers.update(headers)
-        # 设置Cookie
-        session.cookies.update({'Cookie': self._get_cookie()})
+        cookie = self._get_cookie()
+        if cookie:
+            session.headers['Cookie'] = cookie
         return session
 
     def make_request(self, url, params=None, retry=3, timeout=10):

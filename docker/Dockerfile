@@ -26,23 +26,11 @@ trusted-host = mirrors.aliyun.com" > /etc/pip.conf && \
     apt-get update && \
     apt-get install -y cron gcc make python3-dev default-libmysqlclient-dev build-essential pkg-config curl && \
     pip install supervisor && \
-    pip install mysqlclient && \
-    pip install requests && \
-    pip install arrow && \
-    pip install numpy && \
-    pip install SQLAlchemy && \
-    pip install PyMySQL && \
-    pip install Logbook && \
-    pip install python_dateutil && \
-    pip install py_mini_racer && \
-    pip install tqdm && \
-    pip install beautifulsoup4 && \
-    pip install bokeh && \
-    pip install pandas && \
-    pip install urllib3 && \
-    pip install tornado && \
-    pip install mini-racer && \
-    pip install easytrader && \
+    pip install mysqlclient
+
+COPY requirements.txt /tmp/requirements.txt
+RUN sed '/TA_Lib/d' /tmp/requirements.txt > /tmp/requirements_docker.txt && \
+    pip install -r /tmp/requirements_docker.txt && \
     mkdir ta-lib && \
     curl -SL $(curl -s https://api.github.com/repos/ta-lib/ta-lib/releases/latest | grep browser_download_url | cut -d'"' -f4 |grep -E 'tar.gz$') | tar -xz --strip-components=1 -C ./ta-lib && \
     cd ta-lib/ && \

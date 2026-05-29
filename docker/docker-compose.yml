@@ -20,6 +20,8 @@ services:
       db_host: InStockDbService
     volumes:
       - /data/instockproxy.txt:/data/InStock/instock/config/proxy.txt
+      - /data/eastmoneycookie.txt:/data/InStock/instock/config/eastmoney_cookie.txt
+      - /data/tushare.json:/data/InStock/instock/config/tushare.json
     depends_on:
       - instockdbservice
     networks:

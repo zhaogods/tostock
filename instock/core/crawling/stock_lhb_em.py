@@ -31,109 +31,11 @@ def stock_lhb_detail_em(
     :return: 龙虎榜详情
     :rtype: pandas.DataFrame
     """
-    start_date = "-".join([start_date[:4], start_date[4:6], start_date[6:]])
-    end_date = "-".join([end_date[:4], end_date[4:6], end_date[6:]])
-    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
-    params = {
-        "sortColumns": "SECURITY_CODE,TRADE_DATE",
-        "sortTypes": "1,-1",
-        "pageSize": "5000",
-        "pageNumber": "1",
-        "reportName": "RPT_DAILYBILLBOARD_DETAILSNEW",
-        "columns": "SECURITY_CODE,SECUCODE,SECURITY_NAME_ABBR,TRADE_DATE,EXPLAIN,CLOSE_PRICE,CHANGE_RATE,BILLBOARD_NET_AMT,BILLBOARD_BUY_AMT,BILLBOARD_SELL_AMT,BILLBOARD_DEAL_AMT,ACCUM_AMOUNT,DEAL_NET_RATIO,DEAL_AMOUNT_RATIO,TURNOVERRATE,FREE_MARKET_CAP,EXPLANATION,D1_CLOSE_ADJCHRATE,D2_CLOSE_ADJCHRATE,D5_CLOSE_ADJCHRATE,D10_CLOSE_ADJCHRATE,SECURITY_TYPE_CODE",
-        "source": "WEB",
-        "client": "WEB",
-        "filter": f"(TRADE_DATE<='{end_date}')(TRADE_DATE>='{start_date}')",
-    }
-    r = fetcher.make_request(url, params=params)
-    data_json = r.json()
-    total_page_num = data_json["result"]["pages"]
-    big_df = pd.DataFrame()
-    for page in range(1, total_page_num + 1):
-        # 添加随机延迟，避免爬取过快
-        time.sleep(random.uniform(1, 1.5))
-        params.update(
-            {
-                "pageNumber": page,
-            }
-        )
-        r = fetcher.make_request(url, params=params)
-        data_json = r.json()
-        temp_df = pd.DataFrame(data_json["result"]["data"])
-        big_df = pd.concat([big_df, temp_df], ignore_index=True)
-
-    big_df.reset_index(inplace=True)
-    big_df["index"] = big_df.index + 1
-    big_df.rename(
-        columns={
-            "index": "-",
-            "SECURITY_CODE": "代码",
-            "SECUCODE": "-",
-            "SECURITY_NAME_ABBR": "名称",
-            "TRADE_DATE": "上榜日",
-            "EXPLAIN": "解读",
-            "CLOSE_PRICE": "收盘价",
-            "CHANGE_RATE": "涨跌幅",
-            "BILLBOARD_NET_AMT": "龙虎榜净买额",
-            "BILLBOARD_BUY_AMT": "龙虎榜买入额",
-            "BILLBOARD_SELL_AMT": "龙虎榜卖出额",
-            "BILLBOARD_DEAL_AMT": "龙虎榜成交额",
-            "ACCUM_AMOUNT": "市场总成交额",
-            "DEAL_NET_RATIO": "净买额占总成交比",
-            "DEAL_AMOUNT_RATIO": "成交额占总成交比",
-            "TURNOVERRATE": "换手率",
-            "FREE_MARKET_CAP": "流通市值",
-            "EXPLANATION": "上榜原因",
-            "D1_CLOSE_ADJCHRATE": "上榜后1日",
-            "D2_CLOSE_ADJCHRATE": "上榜后2日",
-            "D5_CLOSE_ADJCHRATE": "上榜后5日",
-            "D10_CLOSE_ADJCHRATE": "上榜后10日",
-        },
-        inplace=True,
-    )
-
-    big_df = big_df[
-        [
-            "代码",
-            "名称",
-            "上榜日",
-            "解读",
-            "收盘价",
-            "涨跌幅",
-            "龙虎榜净买额",
-            "龙虎榜买入额",
-            "龙虎榜卖出额",
-            "龙虎榜成交额",
-            "市场总成交额",
-            "净买额占总成交比",
-            "成交额占总成交比",
-            "换手率",
-            "流通市值",
-            "上榜原因",
-            "上榜后1日",
-            "上榜后2日",
-            "上榜后5日",
-            "上榜后10日",
-        ]
-    ]
-    big_df["上榜日"] = pd.to_datetime(big_df["上榜日"]).dt.date
-
-    big_df["收盘价"] = pd.to_numeric(big_df["收盘价"], errors="coerce")
-    big_df["涨跌幅"] = pd.to_numeric(big_df["涨跌幅"], errors="coerce")
-    big_df["龙虎榜净买额"] = pd.to_numeric(big_df["龙虎榜净买额"], errors="coerce")
-    big_df["龙虎榜买入额"] = pd.to_numeric(big_df["龙虎榜买入额"], errors="coerce")
-    big_df["龙虎榜卖出额"] = pd.to_numeric(big_df["龙虎榜卖出额"], errors="coerce")
-    big_df["龙虎榜成交额"] = pd.to_numeric(big_df["龙虎榜成交额"], errors="coerce")
-    big_df["市场总成交额"] = pd.to_numeric(big_df["市场总成交额"], errors="coerce")
-    big_df["净买额占总成交比"] = pd.to_numeric(big_df["净买额占总成交比"], errors="coerce")
-    big_df["成交额占总成交比"] = pd.to_numeric(big_df["成交额占总成交比"], errors="coerce")
-    big_df["换手率"] = pd.to_numeric(big_df["换手率"], errors="coerce")
-    big_df["流通市值"] = pd.to_numeric(big_df["流通市值"], errors="coerce")
-    big_df["上榜后1日"] = pd.to_numeric(big_df["上榜后1日"], errors="coerce")
-    big_df["上榜后2日"] = pd.to_numeric(big_df["上榜后2日"], errors="coerce")
-    big_df["上榜后5日"] = pd.to_numeric(big_df["上榜后5日"], errors="coerce")
-    big_df["上榜后10日"] = pd.to_numeric(big_df["上榜后10日"], errors="coerce")
-    return big_df
+    import akshare as ak
+    df = ak.stock_lhb_detail_em(start_date=start_date, end_date=end_date)
+    if "序号" in df.columns:
+        df = df.drop(columns=["序号"])
+    return df
 
 
 def stock_lhb_stock_statistic_em(symbol: str = "近一月") -> pd.DataFrame:
@@ -236,87 +138,11 @@ def stock_lhb_jgmmtj_em(
     :return: 机构买卖每日统计
     :rtype: pandas.DataFrame
     """
-    start_date = "-".join([start_date[:4], start_date[4:6], start_date[6:]])
-    end_date = "-".join([end_date[:4], end_date[4:6], end_date[6:]])
-    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
-    params = {
-        "sortColumns": "NET_BUY_AMT,TRADE_DATE,SECURITY_CODE",
-        "sortTypes": "-1,-1,1",
-        "pageSize": "5000",
-        "pageNumber": "1",
-        "reportName": "RPT_ORGANIZATION_TRADE_DETAILS",
-        "columns": "ALL",
-        "source": "WEB",
-        "client": "WEB",
-        "filter": f"(TRADE_DATE>='{start_date}')(TRADE_DATE<='{end_date}')",
-    }
-    r = fetcher.make_request(url, params=params)
-    data_json = r.json()
-    temp_df = pd.DataFrame(data_json["result"]["data"])
-    temp_df.reset_index(inplace=True)
-    temp_df["index"] = temp_df.index + 1
-    temp_df.columns = [
-        "序号",
-        "-",
-        "名称",
-        "代码",
-        "上榜日期",
-        "收盘价",
-        "涨跌幅",
-        "买方机构数",
-        "卖方机构数",
-        "机构买入总额",
-        "机构卖出总额",
-        "机构买入净额",
-        "市场总成交额",
-        "机构净买额占总成交额比",
-        "换手率",
-        "流通市值",
-        "上榜原因",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
-    ]
-    temp_df = temp_df[
-        [
-            "序号",
-            "代码",
-            "名称",
-            "收盘价",
-            "涨跌幅",
-            "买方机构数",
-            "卖方机构数",
-            "机构买入总额",
-            "机构卖出总额",
-            "机构买入净额",
-            "市场总成交额",
-            "机构净买额占总成交额比",
-            "换手率",
-            "流通市值",
-            "上榜原因",
-            "上榜日期",
-        ]
-    ]
-    temp_df["上榜日期"] = pd.to_datetime(temp_df["上榜日期"]).dt.date
-    temp_df["收盘价"] = pd.to_numeric(temp_df["收盘价"], errors="coerce")
-    temp_df["涨跌幅"] = pd.to_numeric(temp_df["涨跌幅"], errors="coerce")
-    temp_df["买方机构数"] = pd.to_numeric(temp_df["买方机构数"], errors="coerce")
-    temp_df["卖方机构数"] = pd.to_numeric(temp_df["卖方机构数"], errors="coerce")
-    temp_df["机构买入总额"] = pd.to_numeric(temp_df["机构买入总额"], errors="coerce")
-    temp_df["机构卖出总额"] = pd.to_numeric(temp_df["机构卖出总额"], errors="coerce")
-    temp_df["机构买入净额"] = pd.to_numeric(temp_df["机构买入净额"], errors="coerce")
-    temp_df["市场总成交额"] = pd.to_numeric(temp_df["市场总成交额"], errors="coerce")
-    temp_df["机构净买额占总成交额比"] = pd.to_numeric(temp_df["机构净买额占总成交额比"], errors="coerce")
-    temp_df["换手率"] = pd.to_numeric(temp_df["换手率"], errors="coerce")
-    temp_df["流通市值"] = pd.to_numeric(temp_df["流通市值"], errors="coerce")
-
-    return temp_df
+    import akshare as ak
+    df = ak.stock_lhb_jgmmtj_em(start_date=start_date, end_date=end_date)
+    if "序号" in df.columns:
+        df = df.drop(columns=["序号"])
+    return df
 
 
 def stock_lhb_jgstatistic_em(symbol: str = "近一月") -> pd.DataFrame:

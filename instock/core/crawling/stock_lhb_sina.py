@@ -96,31 +96,8 @@ def stock_lhb_ggtj_sina(symbol: str = "5") -> pd.DataFrame:
     :return: 龙虎榜-个股上榜统计
     :rtype: pandas.DataFrame
     """
-    url = (
-        "https://vip.stock.finance.sina.com.cn/q/go.php/vLHBData/kind/ggtj/index.phtml"
-    )
-    last_page_num = _find_last_page(url, symbol)
-    big_df = pd.DataFrame()
-    for page in tqdm(range(1, last_page_num + 1), leave=False):
-        params = {
-            "last": symbol,
-            "p": page,
-        }
-        r = requests.get(url, proxies = proxys().get_proxies(), params=params)
-        temp_df = pd.read_html(StringIO(r.text))[0].iloc[0:, :]
-        big_df = pd.concat(objs=[big_df, temp_df], ignore_index=True)
-    big_df["股票代码"] = big_df["股票代码"].astype(str).str.zfill(6)
-    big_df.columns = [
-        "股票代码",
-        "股票名称",
-        "上榜次数",
-        "累积购买额",
-        "累积卖出额",
-        "净额",
-        "买入席位数",
-        "卖出席位数",
-    ]
-    return big_df
+    import akshare as ak
+    return ak.stock_lhb_ggtj_sina(symbol=symbol)
 
 
 def stock_lhb_yytj_sina(symbol: str = "5") -> pd.DataFrame:

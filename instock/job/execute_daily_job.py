@@ -40,8 +40,10 @@ def main():
     bj.main()
     # 第2.1步创建股票基础数据表
     hdj.main()
+    time.sleep(5)  # push2 实时行情完成后等待冷却
     # 第2.2步创建综合股票数据表
     sddj.main()
+    time.sleep(3)  # xuangu API 完成后等待
     with concurrent.futures.ThreadPoolExecutor() as executor:
         # # 第3.1步创建股票其它基础数据表
         executor.submit(hdtj.main)
@@ -55,6 +57,7 @@ def main():
     # # # # 第6步创建股票回测
     # bdj.main()
 
+    time.sleep(3)  # 资金流/龙虎榜等完成后等待
     # # # # 第7步创建股票闭盘后才有的数据
     acdj.main()
 

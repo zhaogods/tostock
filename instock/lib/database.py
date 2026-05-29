@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 import os
+from pathlib import Path
 import pymysql
 from sqlalchemy import create_engine
 from sqlalchemy.types import NVARCHAR
@@ -17,6 +19,17 @@ db_password = "root"  # 数据库访问密码
 db_database = "instockdb"  # 数据库名称
 db_port = 3306  # 数据库服务端口
 db_charset = "utf8mb4"  # 数据库字符集
+
+_db_config_file = Path(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'database.json'))
+if _db_config_file.exists():
+    with open(_db_config_file, 'r', encoding='utf-8') as file:
+        _db_config = json.load(file)
+    db_host = _db_config.get('host', db_host)
+    db_user = _db_config.get('user', db_user)
+    db_password = _db_config.get('password', db_password)
+    db_database = _db_config.get('database', db_database)
+    db_port = int(_db_config.get('port', db_port))
+    db_charset = _db_config.get('charset', db_charset)
 
 # 使用环境变量获得数据库,docker -e 传递
 _db_host = os.environ.get('db_host')
@@ -37,7 +50,9 @@ if _db_port is not None:
 
 MYSQL_CONN_URL = "mysql+pymysql://%s:%s@%s:%s/%s?charset=%s" % (
     db_user, db_password, db_host, db_port, db_database, db_charset)
-logging.info(f"数据库链接信息：{ MYSQL_CONN_URL}")
+MYSQL_CONN_LOG_URL = "mysql+pymysql://%s:%s@%s:%s/%s?charset=%s" % (
+    db_user, '***' if db_password else '', db_host, db_port, db_database, db_charset)
+logging.info(f"数据库链接信息：{MYSQL_CONN_LOG_URL}")
 
 MYSQL_CONN_DBAPI = {'host': db_host, 'user': db_user, 'password': db_password, 'database': db_database,
                     'charset': db_charset, 'port': db_port, 'autocommit': True}

@@ -72,7 +72,7 @@ def save_nph_stock_fund_flow_data(date, before=True):
 
     try:
         times = tuple(range(4))
-        results = run_check_stock_fund_flow(times)
+        results = run_check_stock_fund_flow(times, date)
         if results is None:
             return
 
@@ -104,11 +104,11 @@ def save_nph_stock_fund_flow_data(date, before=True):
         logging.error(f"basic_data_other_daily_job.save_nph_stock_fund_flow_data处理异常：{e}")
 
 
-def run_check_stock_fund_flow(times):
+def run_check_stock_fund_flow(times, date=None):
     data = {}
     try:
         for k in times :
-            _data = stf.fetch_stocks_fund_flow(k)
+            _data = stf.fetch_stocks_fund_flow(k, date=date)
             if _data is not None:
                 data[k] = _data
     except Exception as e:

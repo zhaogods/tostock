@@ -25,94 +25,14 @@ def fund_etf_spot_em() -> pd.DataFrame:
     :return: ETF 实时行情
     :rtype: pandas.DataFrame
     """
-    url = "http://88.push2.eastmoney.com/api/qt/clist/get"
-    page_size = 50
-    page_current = 1
-    params = {
-        "pn": page_current,
-        "pz": page_size,
-        "po": "1",
-        "np": "1",
-        "ut": "bd1d9ddb04089700cf9c27f6f7426281",
-        "fltt": "2",
-        "invt": "2",
-        "wbp2u": "|0|0|0|web",
-        "fid": "f12",
-        "fs": "b:MK0021,b:MK0022,b:MK0023,b:MK0024",
-        "fields": "f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21,f23,f24,f25,f22,f11,f62,f128,f136,f115,f152",
-        "_": "1672806290972",
-    }
-    r =  fetcher.make_request(url, params=params)
-    data_json = r.json()
-
-    data = data_json["data"]["diff"]
-    if not data:
-        return pd.DataFrame()
-
-    data_count = data_json["data"]["total"]
-    page_count = math.ceil(data_count/page_size)
-    while page_count > 1:
-        # 添加随机延迟，避免爬取过快
-        time.sleep(random.uniform(1, 1.5))
-        page_current = page_current + 1
-        params["pn"] = page_current
-        r =  fetcher.make_request(url, params=params)
-        data_json = r.json()
-        _data = data_json["data"]["diff"]
-        data.extend(_data)
-        page_count =page_count - 1
-
-    temp_df = pd.DataFrame(data)
-    temp_df.rename(
-        columns={
-            "f12": "代码",
-            "f14": "名称",
-            "f2": "最新价",
-            "f3": "涨跌幅",
-            "f4": "涨跌额",
-            "f5": "成交量",
-            "f6": "成交额",
-            "f17": "开盘价",
-            "f15": "最高价",
-            "f16": "最低价",
-            "f18": "昨收",
-            "f8": "换手率",
-            "f21": "流通市值",
-            "f20": "总市值",
-        },
-        inplace=True,
-    )
-    temp_df = temp_df[
-        [
-            "代码",
-            "名称",
-            "最新价",
-            "涨跌幅",
-            "涨跌额",
-            "成交量",
-            "成交额",
-            "开盘价",
-            "最高价",
-            "最低价",
-            "昨收",
-            "换手率",
-            "流通市值",
-            "总市值",
-        ]
+    import akshare as ak
+    df = ak.fund_etf_spot_em()
+    ETFS_COLUMNS = [
+        "代码", "名称", "最新价", "涨跌幅", "涨跌额", "成交量", "成交额",
+        "开盘价", "最高价", "最低价", "昨收", "换手率", "流通市值", "总市值",
     ]
-    temp_df["最新价"] = pd.to_numeric(temp_df["最新价"], errors="coerce")
-    temp_df["涨跌幅"] = pd.to_numeric(temp_df["涨跌幅"], errors="coerce")
-    temp_df["涨跌额"] = pd.to_numeric(temp_df["涨跌额"], errors="coerce")
-    temp_df["成交量"] = pd.to_numeric(temp_df["成交量"], errors="coerce")
-    temp_df["成交额"] = pd.to_numeric(temp_df["成交额"], errors="coerce")
-    temp_df["开盘价"] = pd.to_numeric(temp_df["开盘价"], errors="coerce")
-    temp_df["最高价"] = pd.to_numeric(temp_df["最高价"], errors="coerce")
-    temp_df["最低价"] = pd.to_numeric(temp_df["最低价"], errors="coerce")
-    temp_df["昨收"] = pd.to_numeric(temp_df["昨收"], errors="coerce")
-    temp_df["换手率"] = pd.to_numeric(temp_df["换手率"], errors="coerce")
-    temp_df["流通市值"] = pd.to_numeric(temp_df["流通市值"], errors="coerce")
-    temp_df["总市值"] = pd.to_numeric(temp_df["总市值"], errors="coerce")
-    return temp_df
+    available = [c for c in ETFS_COLUMNS if c in df.columns]
+    return df[available]
 
 
 @lru_cache()

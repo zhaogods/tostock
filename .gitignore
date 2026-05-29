@@ -66,6 +66,13 @@ instance/
 # Scrapy stuff:
 .scrapy
 
+# Claude Code session data
+.claude/
+
+# Sensitive config files (replace with your own)
+instock/config/database.json
+instock/config/tushare.json
+
 # Sphinx documentation
 docs/_build/
 

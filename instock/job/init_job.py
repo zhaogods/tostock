@@ -3,6 +3,7 @@
 
 
 import logging
+import pandas as pd
 import pymysql
 import os.path
 import sys
@@ -10,6 +11,7 @@ import sys
 cpath_current = os.path.dirname(os.path.dirname(__file__))
 cpath = os.path.abspath(os.path.join(cpath_current, os.pardir))
 sys.path.append(cpath)
+import instock.core.tablestructure as tbs
 import instock.lib.database as mdb
 
 __author__ = 'myh '
@@ -25,22 +27,52 @@ def create_new_database():
             try:
                 create_sql = f"CREATE DATABASE IF NOT EXISTS `{mdb.db_database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
                 db.execute(create_sql)
-                create_new_base_table()
             except Exception as e:
                 logging.error(f"init_job.create_new_database处理异常：{e}")
 
 
+def _iter_project_tables():
+    tables = [
+        (tbs.TABLE_CN_STOCK_ATTENTION, "`code`"),
+        (tbs.TABLE_CN_STOCK_SELECTION, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_SPOT, "`date`,`code`"),
+        (tbs.TABLE_CN_ETF_SPOT, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_FUND_FLOW, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_FUND_FLOW_INDUSTRY, "`date`,`name`"),
+        (tbs.TABLE_CN_STOCK_FUND_FLOW_CONCEPT, "`date`,`name`"),
+        (tbs.TABLE_CN_STOCK_BONUS, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_TOP, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_lHB, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_BLOCKTRADE, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_CHIP_RACE_OPEN, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_CHIP_RACE_END, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_LIMITUP_REASON, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_SPOT_BUY, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_INDICATORS, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_INDICATORS_BUY, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_INDICATORS_SELL, "`date`,`code`"),
+        (tbs.TABLE_CN_STOCK_KLINE_PATTERN, "`date`,`code`"),
+    ]
+    tables.extend((table, "`date`,`code`") for table in tbs.TABLE_CN_STOCK_STRATEGIES)
+    return tables
+
+
 # 创建基础表。
 def create_new_base_table():
-    with pymysql.connect(**mdb.MYSQL_CONN_DBAPI) as conn:
-        with conn.cursor() as db:
-            create_table_sql = """CREATE TABLE IF NOT EXISTS `cn_stock_attention` (
-                                  `datetime` datetime(0) NULL DEFAULT NULL, 
-                                  `code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-                                  PRIMARY KEY (`code`) USING BTREE,
-                                  INDEX `INIX_DATETIME`(`datetime`) USING BTREE
-                                  ) CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = Dynamic;"""
-            db.execute(create_table_sql)
+    ensure_project_tables()
+
+
+def ensure_project_tables():
+    for table, primary_keys in _iter_project_tables():
+        table_name = table['name']
+        if mdb.checkTableIsExist(table_name):
+            continue
+        try:
+            data = pd.DataFrame(columns=list(table['columns']))
+            cols_type = tbs.get_field_types(table['columns'])
+            mdb.insert_db_from_df(data, table_name, cols_type, False, primary_keys)
+        except Exception as e:
+            logging.error(f"init_job.ensure_project_tables处理异常：{table_name}表{e}")
 
 
 def check_database():
@@ -57,6 +89,7 @@ def main():
         logging.error("执行信息：数据库不存在，将创建。")
         # 检查数据库失败，
         create_new_database()
+    ensure_project_tables()
     # 执行数据初始化。
 
 

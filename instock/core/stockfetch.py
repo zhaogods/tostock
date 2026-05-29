@@ -20,6 +20,12 @@ import instock.core.crawling.stock_fund_em as sff
 import instock.core.crawling.stock_fhps_em as sfe
 import instock.core.crawling.stock_chip_race as scr
 import instock.core.crawling.stock_limitup_reason as slr
+from instock.core.tushare_provider import TushareProvider
+
+try:
+    ts_provider = TushareProvider()
+except Exception:
+    ts_provider = None
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
@@ -93,13 +99,17 @@ def fetch_etfs(date):
 # 读取当天股票数据
 def fetch_stocks(date):
     try:
-        data = she.stock_zh_a_spot_em()
+        if ts_provider is not None:
+            data = ts_provider.fetch_stock_spot(date)
+        else:
+            data = she.stock_zh_a_spot_em()
         if data is None or len(data.index) == 0:
             return None
-        if date is None:
-            data.insert(0, 'date', datetime.datetime.now().strftime("%Y-%m-%d"))
-        else:
-            data.insert(0, 'date', date.strftime("%Y-%m-%d"))
+        if ts_provider is None:
+            if date is None:
+                data.insert(0, 'date', datetime.datetime.now().strftime("%Y-%m-%d"))
+            else:
+                data.insert(0, 'date', date.strftime("%Y-%m-%d"))
         data.columns = list(tbs.TABLE_CN_STOCK_SPOT['columns'])
         data = data.loc[data['code'].apply(is_a_stock)].loc[data['new_price'].apply(is_open)]
         return data
@@ -122,10 +132,13 @@ def fetch_stock_selection():
 
 
 # 读取股票资金流向
-def fetch_stocks_fund_flow(index):
+def fetch_stocks_fund_flow(index, date=None):
     try:
         cn_flow = tbs.CN_STOCK_FUND_FLOW[index]
-        data = sff.stock_individual_fund_flow_rank(indicator=cn_flow['cn'])
+        if ts_provider is not None and cn_flow['cn'] == '今日':
+            data = ts_provider.fetch_stock_fund_flow(indicator='今日', date=date)
+        else:
+            data = sff.stock_individual_fund_flow_rank(indicator=cn_flow['cn'])
         if data is None or len(data.index) == 0:
             return None
         data.columns = list(cn_flow['columns'])
@@ -329,15 +342,12 @@ def fetch_etf_hist(data_base, date_start=None, date_end=None, adjust='qfq'):
                                         adjust=adjust)
         else:
             data = fee.fund_etf_hist_em(symbol=code, period="daily", start_date=date_start, adjust=adjust)
-
         if data is None or len(data.index) == 0:
             return None
         data.columns = tuple(tbs.CN_STOCK_HIST_DATA['columns'])
-        data = data.sort_index()  # 将数据按照日期排序下。
-        if data is not None:
-            data.loc[:, 'p_change'] = tl.ROC(data['close'].values, 1)
-            data['p_change'].values[np.isnan(data['p_change'].values)] = 0.0
-            data["volume"] = data['volume'].values.astype('double') * 100  # 成交量单位从手变成股。
+        data = data.sort_index()
+        data.loc[:, 'p_change'] = np.nan_to_num(np.asarray(tl.ROC(data['close'].values, 1), dtype='double'), nan=0.0)
+        data["volume"] = data['volume'].values.astype('double') * 100  # 成交量单位从手变成股。
         return data
     except Exception as e:
         logging.error(f"stockfetch.fetch_etf_hist处理异常：{e}")
@@ -355,8 +365,7 @@ def fetch_stock_hist(data_base, date_start=None, is_cache=True):
     try:
         data = stock_hist_cache(code, date_start, None, is_cache, 'qfq')
         if data is not None:
-            data.loc[:, 'p_change'] = tl.ROC(data['close'].values, 1)
-            data['p_change'].values[np.isnan(data['p_change'].values)] = 0.0
+            data.loc[:, 'p_change'] = np.nan_to_num(np.asarray(tl.ROC(data['close'].values, 1), dtype='double'), nan=0.0)
             data["volume"] = data['volume'].values.astype('double') * 100  # 成交量单位从手变成股。
         return data
     except Exception as e:
@@ -394,7 +403,6 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
                     stock.to_pickle(cache_file, compression="gzip")
             except Exception:
                 pass
-            # time.sleep(1)
             return stock
     except Exception as e:
         logging.error(f"stockfetch.stock_hist_cache处理异常：{code}代码{e}")

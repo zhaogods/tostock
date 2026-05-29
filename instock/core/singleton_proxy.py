@@ -19,18 +19,19 @@ __date__ = '2025/1/6 '
 # 读取代理
 class proxys(metaclass=singleton_type):
     def __init__(self):
+        self.data = []
         try:
             with open(proxy_filename, "r") as file:
                 self.data = list(set(line.strip() for line in file.readlines() if line.strip()))
         except Exception:
-           pass
+            pass
 
     def get_data(self):
         return self.data
 
     def get_proxies(self):
-        if self.data is None or len(self.data)==0:
-            return None
+        if self.data is None or len(self.data) == 0:
+            return {"http": None, "https": None, "ftp": None}
 
         proxy = random.choice(self.data)
         return {"http": proxy, "https": proxy}

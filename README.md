@@ -1,10 +1,15 @@
 [对应IMA知识库](https://ima.qq.com/wiki/?shareId=8b0da768c77bc863f1cad8eb9482e37a6eeb26ad7171523b687d48c1a67c8e2c)：股票量化因子 AI 决策引擎，2200 + 维专业因子池，AI 深度解析多维数据，精准挖掘高确定性个股，赋能专业投资高效稳健决策。 https://ima.qq.com/wiki/?shareId=8b0da768c77bc863f1cad8eb9482e37a6eeb26ad7171523b687d48c1a67c8e2c 。
 
-**InStock股票系统**
+**tostock 股票系统** — Fork of [InStock](https://github.com/mayanghua/instock)，做了以下优化与迁移：
 
-InStock股票系统，抓取每日股票、ETF关键数据，计算股票技术指标、筹码分布，识别K线各种形态，综合选股，内置多种选股策略，支持选股验证回测，支持自动交易，支持批量时间，运行高效，支持PC、平板、手机移动设备显示，同时提供Docker镜像方便安装，是量化投资的好帮手。
+- **数据源升级**：接入 Tushare（个股行情+资金流向）和 AkShare（ETF行情+事件数据），降低对东方财富 push2 端点的单一依赖
+- **反风控优化**：分页请求间隔按端点分级（3-5秒敏感端点 / 2-3秒普通端点），作业间增加冷却间隔
+- **错峰刷新**：新增 `realtime_only_job.py`，盘中仅刷新实时行情，收盘后 17:30 跑完整任务
+- **妙想接口已移除**：不再依赖东方财富妙想 Skills API
 
-The stock system,Capture key data on daily stocks and ETFs, calculate stock technical indicators, chip distribution, Position Cost Distribution(CYQ), identify various K-line forms, comprehensive stock selection, built-in multiple stock selection strategies, support stock selection verification and backtesting, support automatic trading, and support batch time , runs efficiently, supports display on PCs, tablets, and mobile phones, and provides Docker images for easy installation, making it a good helper for quantitative investment.
+tostock股票系统，抓取每日股票、ETF关键数据，计算股票技术指标、筹码分布，识别K线各种形态，综合选股，内置多种选股策略，支持选股验证回测，支持自动交易，支持批量时间，运行高效，支持PC、平板、手机移动设备显示，同时提供Docker镜像方便安装，是量化投资的好帮手。
+
+tostock — A fork of InStock with optimized data sourcing (Tushare + AkShare + legacy Eastmoney crawlers), anti-rate-limiting measures, and staggered intraday/end-of-day refresh scheduling.
 
 Docker镜像：https://hub.docker.com/r/mayanghua/instock 。
 
@@ -374,8 +379,28 @@ abc:123456@65.1.244.232:3128
     Cookie有效期：东方财富网的Cookie通常会在一段时间后过期（一般为几天到几周），如突然无法正常工作，可能是Cookie过期了，需要重新获取并设置
     定期更新：建议每隔一段时间（如每周）更新一次Cookie，以确保爬取的稳定性
     多账号轮换：如果有多个东方财富网账号，可以轮换使用不同账号的Cookie，进一步降低被限制的风险
+
+### 9.配置 Tushare 数据源（推荐）
+
+tostock 已接入 [Tushare Pro](https://tushare.pro/) 作为个股行情和资金流的主要数据源，可绕过东方财富 push2 的 IP 封禁。需要 2000 积分以上。
+
+1、注册并获取 Token
+    访问 https://tushare.pro 注册账号，在个人中心获取 API Token
+2、配置 Token
+    编辑 `instock/config/tushare.json`，填入你的 Token：
 ```
-### 9.安装自动交易（可选）
+{
+    "token": "你的Tushare-Token"
+}
+```
+3、Docker 部署时需挂载 Token 文件
+    docker run 时增加 `-v /data/tushare.json:/data/InStock/instock/config/tushare.json`
+
+4、Tushare 积分要求
+    2000积分（注册+完善个人信息可获取）即可覆盖个股行情(daily+daily_basic)和个股资金流(moneyflow)。
+    如升级到 6000积分，可额外覆盖行业/概念板块资金流。
+```
+### 10.安装自动交易（可选）
 
 ```
 1.安装交易软件
@@ -412,27 +437,29 @@ abc:123456@65.1.244.232:3128
 
 支持批量作业，具体参见run_job.bat中的注释说明。
 
-建议将其加入到任务计划中，工作日的每天17：00执行。
+**调度策略：**
+- 盘中每30分钟：`realtime_only_job.py`（仅刷新实时行情，降低风控）
+- 收盘后17:30：`execute_daily_job.py`（全量数据：选股、资金流、龙虎榜、分红、大宗交易等）
 
 **数据抓取、处理原则：**
 
-1).开盘即有且无历史数据的：综合选股、每日股票数据、股票资金流向、股票分红配送、龙虎榜、每日ETF数据；
+1).盘中每30分钟：每日股票数据、每日ETF数据（仅实时行情，通过 `realtime_only_job.py`）；
 
-2).收盘即有且有历史数据的：股票指标数据、股票K线形态、股票策略数据；
+2).收盘后17:30：综合选股、股票资金流向、股票分红配送、龙虎榜、大宗交易等全部数据（通过 `execute_daily_job.py`）；
 
-3).收盘后1~2小时才有且有历史数据的：大宗交易。
+3).股票指标数据、股票K线形态、股票策略数据（execute_daily_job.py 中已注释，按需启用）。
 
-运行run_job.bat，会依据上面原则获取各模块当前或前个交易日的数据。
-
-```
-
-运行 run_job.bat
-```
-若想看开盘后的当前实时数据，可以运行下面，很快大概1秒：
+若想手动运行盘中实时行情：
 
 ```
-#基础数据作业 
-python basic_data_daily_job.py
+#盘中实时行情作业（仅股票+ETF行情）
+python realtime_only_job.py
+```
+
+若想手动运行完整日任务：
+
+```
+python execute_daily_job.py
 ```
 #### 10.2.启动web服务
 
@@ -542,7 +569,7 @@ db_port       # 数据库服务端口
 
 ### 5. 系统运行
 
-启动容器后，会自动运行，首先会初始化数据、启动web服务。然后每小时执行“基础数据抓取”，每天17:30执行所有的数据抓取、处理、分析、识别、回测。
+启动容器后，会自动运行，首先会初始化数据、启动web服务。盘中每30分钟执行 `realtime_only_job.py`（仅刷新实时行情），每天17:30执行 `execute_daily_job.py`（全量数据抓取、处理、分析）。
 
 打开浏览器，输入：http://localhost:9988/ ，即可使用本系统的可视化功能。
 
@@ -561,8 +588,9 @@ cat InStock/instock/bin/run_job.sh
 区间时间作业 python execute_daily_job.py 2022-01-01 2022-03-01
 ------单功能作业，支持批量作业，回测数据自动填补到当前
 综合选股作业 python selection_data_daily_job.py
+盘中实时行情作业 python realtime_only_job.py
 基础数据实时作业 python basic_data_daily_job.py
-基础数据收盘2小时后作业 python backtest_data_daily_job.py
+基础数据收盘后作业 python basic_data_after_close_daily_job.py
 基础数据非实时作业 python basic_data_other_daily_job.py
 指标数据作业 python indicators_data_daily_job.py
 K线形态作业 klinepattern_data_daily_job.py
