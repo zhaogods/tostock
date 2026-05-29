@@ -12,8 +12,6 @@ import tushare as ts
 
 
 class TushareProvider:
-    CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config')
-
     STOCK_SPOT_COLUMNS = (
         'date', 'code', 'name', 'new_price', 'change_rate', 'ups_downs',
         'volume', 'deal_amount', 'amplitude', 'turnoverrate', 'volume_ratio',
@@ -30,12 +28,20 @@ class TushareProvider:
     def __init__(self, token=None):
         token = token or self._read_token()
         if not token or token.startswith('YOUR_'):
-            raise RuntimeError("Tushare token 未配置，请在 instock/config/tushare.json 中填入 token")
+            raise RuntimeError(
+                "Tushare token 未配置。请在 .env 中设置 TUSHARE_TOKEN，"
+                "或在 instock/config/tushare.json 中填入 token"
+            )
         ts.set_token(token)
         self.pro = ts.pro_api()
 
-    def _read_token(self):
-        config_path = os.path.join(self.CONFIG_DIR, 'tushare.json')
+    @staticmethod
+    def _read_token():
+        token = os.environ.get('TUSHARE_TOKEN', '')
+        if token:
+            return token
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), 'config', 'tushare.json')
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 return json.load(f).get('token', '')

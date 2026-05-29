@@ -13,6 +13,23 @@ from sqlalchemy import inspect
 __author__ = 'myh '
 __date__ = '2023/3/10 '
 
+# 自动加载项目根目录的 .env 文件（无需 python-dotenv）
+def _load_dotenv():
+    env_path = Path(__file__).resolve().parent.parent.parent / '.env'
+    if not env_path.exists():
+        return
+    with open(env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, val = line.partition('=')
+            key, val = key.strip(), val.strip()
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+
+_load_dotenv()
+
 db_host = "localhost"  # 数据库服务主机
 db_user = "root"  # 数据库访问用户
 db_password = "root"  # 数据库访问密码
