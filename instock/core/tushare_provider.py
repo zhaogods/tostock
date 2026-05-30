@@ -270,7 +270,7 @@ class TushareProvider:
 
         count = 0
         total = len(codes)
-        rate_limit = int(_os.environ.get('TUSHARE_RATE_LIMIT', '400'))
+        rate_limit = int(_os.environ.get('TUSHARE_RATE_LIMIT', '180'))
 
         for i, code in enumerate(codes):
             cache_file = _os.path.join(

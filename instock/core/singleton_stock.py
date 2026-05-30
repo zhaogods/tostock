@@ -7,9 +7,25 @@ import instock.core.stockfetch as stf
 import instock.core.tablestructure as tbs
 import instock.lib.trade_time as trd
 from instock.lib.singleton_type import singleton_type
+import numpy as np
+import pandas as pd
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
+
+def _fallback_stock_list():
+    try:
+        from instock.core.tushare_provider import TushareProvider
+        p = TushareProvider()
+        codes = p._get_all_codes()
+        if not codes:
+            return None
+        data = pd.DataFrame({'code': codes, 'name': ''})
+        data['date'] = None
+        data['new_price'] = np.nan
+        return data
+    except Exception:
+        return None
 
 
 # 读取当天股票数据
@@ -19,6 +35,9 @@ class stock_data(metaclass=singleton_type):
             self.data = stf.fetch_stocks(date)
         except Exception as e:
             logging.error(f"singleton.stock_data处理异常：{e}")
+            self.data = None
+        if self.data is None:
+            self.data = _fallback_stock_list()
 
     def get_data(self):
         return self.data
