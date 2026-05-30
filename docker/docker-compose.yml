@@ -15,11 +15,12 @@ services:
     image: zsswwz/tostock:latest
     container_name: InStock
     ports:
-      - "9988:9988"
+      - "${WEB_PORT:-9988}:${WEB_PORT:-9988}"
     env_file:
       - .env
     environment:
-      db_host: InStockDbService
+      - db_host=InStockDbService
+      - Tornado_COOKIE_SECRET=${Tornado_COOKIE_SECRET:-$(openssl rand -hex 32)}
     volumes:
       - /data/instockproxy.txt:/data/tostock/instock/config/proxy.txt
       - /data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt
