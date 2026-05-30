@@ -33,7 +33,8 @@ class proxys(metaclass=singleton_type):
                 self.data = list(set(line.strip() for line in file.readlines() if line.strip()))
         except Exception:
             self.data = []
-        self._last_refresh = time.time()
+        if self.data:
+            self._last_refresh = time.time()
 
     def _try_refresh(self):
         if time.time() - self._last_refresh < self._REFRESH_INTERVAL:
