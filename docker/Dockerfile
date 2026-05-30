@@ -10,18 +10,10 @@ ENV LC_ALL=C
 ENV PYTHONPATH=/data/tostock
 EXPOSE 9988
 
-# 使用国内镜像地址加速。修改debian apt更新地址，pip地址，设置时区
-# https://opsx.alibaba.com/mirror
-# https://mirrors.tuna.tsinghua.edu.cn/help/pypi/
-# cat /etc/apt/sources.list 参考原始地址，再确定怎么样替换
-# 安装依赖库
+# 设置时区为上海，安装编译依赖
 # apt-get autoremove -y 删除没有用的依赖lib
 # apt-get --purge remove 软件包名称 , 删除已安装包（不保留配置文件)
-RUN sed -i "s@http://\(deb\|security\).debian.org@https://mirrors.aliyun.com@g" /etc/apt/sources.list && \
-    echo  "[global]\n\
-index-url = https://mirrors.aliyun.com/pypi/simple\n\
-trusted-host = mirrors.aliyun.com" > /etc/pip.conf && \
-    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     apt-get update && \
     apt-get install -y cron gcc make python3-dev default-libmysqlclient-dev build-essential pkg-config curl && \
