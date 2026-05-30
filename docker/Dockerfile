@@ -24,7 +24,7 @@ COPY tostock/requirements.txt /tmp/requirements.txt
 RUN sed '/TA_Lib/d' /tmp/requirements.txt > /tmp/requirements_docker.txt && \
     pip install --default-timeout=300 -r /tmp/requirements_docker.txt && \
     mkdir ta-lib && \
-    curl -SL $(curl -s https://api.github.com/repos/ta-lib/ta-lib/releases/latest | grep browser_download_url | cut -d'"' -f4 |grep -E 'tar.gz$') | tar -xz --strip-components=1 -C ./ta-lib && \
+    curl -SL https://github.com/ta-lib/ta-lib/releases/download/v0.6.4/ta-lib-0.6.4-src.tar.gz | tar -xz --strip-components=1 -C ./ta-lib && \
     cd ta-lib/ && \
     ./configure && \
     make && \
