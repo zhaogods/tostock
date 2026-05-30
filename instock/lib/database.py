@@ -30,12 +30,18 @@ def _load_dotenv():
 
 _load_dotenv()
 
-db_host = "localhost"  # 数据库服务主机
-db_user = "root"  # 数据库访问用户
-db_password = "root"  # 数据库访问密码
-db_database = "instockdb"  # 数据库名称
-db_port = 3306  # 数据库服务端口
-db_charset = "utf8mb4"  # 数据库字符集
+db_host = os.environ.get('db_host', 'localhost')
+db_user = os.environ.get('db_user', 'root')
+db_password = os.environ.get('db_password', '')
+db_database = os.environ.get('db_database', 'instockdb')
+db_port = int(os.environ.get('db_port', '3306'))
+db_charset = os.environ.get('db_charset', 'utf8mb4')
+
+if not db_password:
+    raise RuntimeError(
+        "数据库密码未配置。请在 .env 中设置 db_password，"
+        "或设置环境变量 db_password"
+    )
 
 _db_config_file = Path(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'database.json'))
 if _db_config_file.exists():

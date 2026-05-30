@@ -13,6 +13,15 @@ from instock.core.singleton_proxy import proxys
 __author__ = 'myh '
 __date__ = '2025/12/31 '
 
+_RETRY_TOTAL = int(os.environ.get('HTTP_RETRY_TOTAL', '3'))
+_RETRY_BACKOFF = float(os.environ.get('HTTP_RETRY_BACKOFF', '0.1'))
+_RETRY_TIMEOUT_GET = int(os.environ.get('HTTP_TIMEOUT_GET', '10'))
+_RETRY_TIMEOUT_POST = int(os.environ.get('HTTP_TIMEOUT_POST', '60'))
+_POOL_CONNECTIONS = int(os.environ.get('HTTP_POOL_CONNS', '50'))
+_POOL_MAXSIZE = int(os.environ.get('HTTP_POOL_MAXSIZE', '50'))
+_RETRY_SLEEP_MIN = float(os.environ.get('HTTP_RETRY_SLEEP_MIN', '1'))
+_RETRY_SLEEP_MAX = float(os.environ.get('HTTP_RETRY_SLEEP_MAX', '3'))
+
 class eastmoney_fetcher:
     """
     东方财富网数据获取器
@@ -49,15 +58,15 @@ class eastmoney_fetcher:
 
         # 配置连接池
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=0.1,
+            total=_RETRY_TOTAL,
+            backoff_factor=_RETRY_BACKOFF,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
         )
         adapter = HTTPAdapter(
             max_retries=retry_strategy,
-            pool_connections=50,  # 增加连接池大小
-            pool_maxsize=50  # 增加连接池最大大小
+            pool_connections=_POOL_CONNECTIONS,
+            pool_maxsize=_POOL_MAXSIZE,
         )
 
         # 为http和https请求添加适配器
@@ -79,7 +88,7 @@ class eastmoney_fetcher:
             session.headers['Cookie'] = cookie
         return session
 
-    def make_request(self, url, params=None, retry=3, timeout=10):
+    def make_request(self, url, params=None, retry=_RETRY_TOTAL, timeout=_RETRY_TIMEOUT_GET):
         """
         发送请求
         :param url: 请求URL
@@ -102,11 +111,11 @@ class eastmoney_fetcher:
                 print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
                 if i < retry - 1:
                     # 随机延迟后重试
-                    time.sleep(random.uniform(1, 3))
+                    time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
                 else:
                     raise
 
-    def make_post_request(self, url, data=None, json=None, params=None, retry=3, timeout=60):
+    def make_post_request(self, url, data=None, json=None, params=None, retry=_RETRY_TOTAL, timeout=_RETRY_TIMEOUT_POST):
         """
         发送POST请求
         :param url: 请求URL
@@ -133,7 +142,7 @@ class eastmoney_fetcher:
                 print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
                 if i < retry - 1:
                     # 随机延迟后重试
-                    time.sleep(random.uniform(1, 3))
+                    time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
                 else:
                     raise
 

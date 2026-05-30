@@ -50,8 +50,9 @@ class Application(tornado.web.Application):
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=os.path.join(os.path.dirname(__file__), "static"),
             xsrf_cookies=False,  # True,
-            # cookie加密
-            cookie_secret="027bb1b670eddf0392cdda8709268a17b58b7",
+            # cookie加密，部署时应通过环境变量设置唯一值
+            cookie_secret=os.environ.get(
+                "Tornado_COOKIE_SECRET", "027bb1b670eddf0392cdda8709268a17b58b7"),
             debug=True,
         )
         super(Application, self).__init__(handlers, **settings)
@@ -73,7 +74,7 @@ def main():
     tornado.options.options.logging = None
 
     http_server = tornado.httpserver.HTTPServer(Application())
-    port = 9988
+    port = int(os.environ.get('WEB_PORT', '9988'))
     http_server.listen(port)
 
     print(f"服务已启动，web地址 : http://localhost:{port}/")

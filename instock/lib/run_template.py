@@ -5,6 +5,7 @@
 import logging
 import datetime
 import concurrent.futures
+import os
 import sys
 import time
 import instock.lib.trade_time as trd
@@ -12,6 +13,7 @@ import instock.lib.trade_time as trd
 __author__ = 'myh '
 __date__ = '2023/3/10 '
 
+_JOB_BATCH_DELAY = int(os.environ.get('JOB_BATCH_DELAY', '2'))
 
 # 通用函数，获得日期参数，支持批量作业。
 def run_with_args(run_fun, *args):
@@ -27,7 +29,7 @@ def run_with_args(run_fun, *args):
                 while run_date <= end_date:
                     if trd.is_trade_date(run_date):
                         executor.submit(run_fun, run_date, *args)
-                        time.sleep(2)
+                        time.sleep(_JOB_BATCH_DELAY)
                     run_date += datetime.timedelta(days=1)
         except Exception as e:
             logging.error(f"run_template.run_with_args处理异常：{run_fun}{sys.argv}{e}")
@@ -41,7 +43,7 @@ def run_with_args(run_fun, *args):
                     run_date = datetime.datetime(int(tmp_year), int(tmp_month), int(tmp_day)).date()
                     if trd.is_trade_date(run_date):
                         executor.submit(run_fun, run_date, *args)
-                        time.sleep(2)
+                        time.sleep(_JOB_BATCH_DELAY)
         except Exception as e:
             logging.error(f"run_template.run_with_args处理异常：{run_fun}{sys.argv}{e}")
     else:

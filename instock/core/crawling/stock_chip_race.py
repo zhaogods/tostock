@@ -6,9 +6,12 @@ Desc: 通达信抢筹
 http://excalc.icfqs.com:7616/TQLEX?Entry=HQServ.hq_nlp
 """
 
+import os
 import pandas as pd
 import requests
 from instock.core.singleton_proxy import proxys
+
+_TDXW_TOKEN = os.environ.get('TDXW_API_TOKEN', '_TDXW_TOKEN')
 
 __author__ = 'myh '
 __date__ = '2025/2/26 '
@@ -24,10 +27,10 @@ def stock_chip_race_open(date: str = "") -> pd.DataFrame:
     #sort:1抢筹委托金额, 2抢筹成交金额, 3开盘金额, 4抢筹幅度, 5抢筹占比
     if date=="":
         params = [{"funcId": 20, "offset": 0, "count": 100, "sort": 1, "period": 0,
-                   "Token": "6679f5cadca97d68245a086793fc1bfc0a50b487487c812f", "modname": "JJQC"}]
+                   "Token": _TDXW_TOKEN, "modname": "JJQC"}]
     else:
         params = [{"funcId": 20, "offset": 0, "count": 100, "sort": 1, "period": 0,
-                   "Token": "6679f5cadca97d68245a086793fc1bfc0a50b487487c812f", "modname": "JJQC", "date": date}]
+                   "Token": _TDXW_TOKEN, "modname": "JJQC", "date": date}]
     headers = {
         "Content-Type": "application/json; charset=UTF-8",
         "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36 TdxW",
@@ -92,10 +95,10 @@ def stock_chip_race_end(date: str = "") -> pd.DataFrame:
     #sort:1抢筹委托金额, 2抢筹成交金额, 3开盘金额, 4抢筹幅度, 5抢筹占比
     if date=="":
         params = [{"funcId": 20, "offset": 0, "count": 100, "sort": 1, "period": 1,
-                   "Token": "6679f5cadca97d68245a086793fc1bfc0a50b487487c812f", "modname": "JJQC"}]
+                   "Token": _TDXW_TOKEN, "modname": "JJQC"}]
     else:
         params = [{"funcId": 20, "offset": 0, "count": 100, "sort": 1, "period": 1,
-                   "Token": "6679f5cadca97d68245a086793fc1bfc0a50b487487c812f", "modname": "JJQC", "date": date}]
+                   "Token": _TDXW_TOKEN, "modname": "JJQC", "date": date}]
     headers = {
         "Content-Type": "application/json; charset=UTF-8",
         "User-Agent": "TdxW",
