@@ -25,12 +25,12 @@ trusted-host = mirrors.aliyun.com" > /etc/pip.conf && \
     echo "Asia/Shanghai" > /etc/timezone && \
     apt-get update && \
     apt-get install -y cron gcc make python3-dev default-libmysqlclient-dev build-essential pkg-config curl && \
-    pip install supervisor && \
-    pip install mysqlclient
+    pip install --default-timeout=300 supervisor && \
+    pip install --default-timeout=300 mysqlclient
 
 COPY tostock/requirements.txt /tmp/requirements.txt
 RUN sed '/TA_Lib/d' /tmp/requirements.txt > /tmp/requirements_docker.txt && \
-    pip install -r /tmp/requirements_docker.txt && \
+    pip install --default-timeout=300 -r /tmp/requirements_docker.txt && \
     mkdir ta-lib && \
     curl -SL $(curl -s https://api.github.com/repos/ta-lib/ta-lib/releases/latest | grep browser_download_url | cut -d'"' -f4 |grep -E 'tar.gz$') | tar -xz --strip-components=1 -C ./ta-lib && \
     cd ta-lib/ && \
