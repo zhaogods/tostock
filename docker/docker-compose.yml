@@ -7,7 +7,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     volumes:
-      - /data/mariadb/data:/var/lib/instockdb
+      - ./data/mariadb:/var/lib/instockdb
     networks:
       - instock_network
 
@@ -22,8 +22,8 @@ services:
       - db_host=InStockDbService
       - Tornado_COOKIE_SECRET=${Tornado_COOKIE_SECRET:-$(openssl rand -hex 32)}
     volumes:
-      - /data/instockproxy.txt:/data/tostock/instock/config/proxy.txt
-      - /data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt
+      - ./data/instockproxy.txt:/data/tostock/instock/config/proxy.txt
+      - ./data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt
     depends_on:
       - instockdbservice
     networks:
