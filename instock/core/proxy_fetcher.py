@@ -27,9 +27,6 @@ def refresh_proxy_pool():
 
     try:
         r = requests.get(api_url, timeout=15)
-
-    try:
-        r = requests.get(_API_URL, timeout=15)
         r.raise_for_status()
         text = r.text.strip()
     except Exception as e:
