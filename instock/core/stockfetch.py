@@ -390,7 +390,9 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
     # 如果缓存存在就直接返回缓存数据。压缩方式。
     try:
         if os.path.isfile(cache_file):
-            return pd.read_pickle(cache_file, compression="gzip")
+            stock = pd.read_pickle(cache_file, compression="gzip")
+            stock.columns = tuple(tbs.CN_STOCK_HIST_DATA['columns'])
+            return stock
         else:
             if ts_provider is not None:
                 end_d = date_end if date_end else datetime.date.today().strftime('%Y%m%d')
