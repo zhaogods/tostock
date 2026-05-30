@@ -15,13 +15,18 @@ __date__ = "2026/5/29 "
 _PROXY_FILE = Path(os.path.join(
     os.path.dirname(__file__), "..", "config", "proxy.txt")).resolve()
 
-_API_URL = os.environ.get("XIEQU_API_URL", "")
+def _get_api_url():
+    return os.environ.get("XIEQU_API_URL", "")
 
 
 def refresh_proxy_pool():
     """从携趣 API 获取代理并验证，写入 proxy.txt。返回可用代理列表。"""
-    if not _API_URL:
+    api_url = _get_api_url()
+    if not api_url:
         return []
+
+    try:
+        r = requests.get(api_url, timeout=15)
 
     try:
         r = requests.get(_API_URL, timeout=15)
