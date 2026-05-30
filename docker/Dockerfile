@@ -28,7 +28,7 @@ trusted-host = mirrors.aliyun.com" > /etc/pip.conf && \
     pip install supervisor && \
     pip install mysqlclient
 
-COPY requirements.txt /tmp/requirements.txt
+COPY tostock/requirements.txt /tmp/requirements.txt
 RUN sed '/TA_Lib/d' /tmp/requirements.txt > /tmp/requirements_docker.txt && \
     pip install -r /tmp/requirements_docker.txt && \
     mkdir ta-lib && \
