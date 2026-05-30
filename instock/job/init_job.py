@@ -22,13 +22,12 @@ __date__ = '2023/3/10 '
 def create_new_database():
     _MYSQL_CONN_DBAPI = mdb.MYSQL_CONN_DBAPI.copy()
     _MYSQL_CONN_DBAPI['database'] = "mysql"
+    _MYSQL_CONN_DBAPI.pop('charset', None)
     with pymysql.connect(**_MYSQL_CONN_DBAPI) as conn:
         with conn.cursor() as db:
-            try:
-                create_sql = f"CREATE DATABASE IF NOT EXISTS `{mdb.db_database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
-                db.execute(create_sql)
-            except Exception as e:
-                logging.error(f"init_job.create_new_database处理异常：{e}")
+            create_sql = f"CREATE DATABASE IF NOT EXISTS `{mdb.db_database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
+            db.execute(create_sql)
+        conn.commit()
 
 
 def _iter_project_tables():
@@ -86,11 +85,15 @@ def main():
     try:
         check_database()
     except Exception as e:
-        logging.error("执行信息：数据库不存在，将创建。")
-        # 检查数据库失败，
+        logging.error(f"执行信息：数据库不存在（{e}），将创建。")
         create_new_database()
+        try:
+            check_database()
+            logging.info("数据库创建成功。")
+        except Exception as e2:
+            logging.error(f"数据库创建失败：{e2}")
+            return
     ensure_project_tables()
-    # 执行数据初始化。
 
 
 # main函数入口
