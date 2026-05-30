@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import os.path
 import sys
 import random
+import time
 from instock.lib.singleton_type import singleton_type
 
 # 在项目运行时，临时将项目路径添加到环境变量
@@ -18,33 +20,41 @@ __date__ = '2025/1/6 '
 
 # 读取代理
 class proxys(metaclass=singleton_type):
+    _REFRESH_INTERVAL = int(os.environ.get('PROXY_REFRESH_MINUTES', '30')) * 60
+
     def __init__(self):
         self.data = []
+        self._last_refresh = 0
+        self._load()
+
+    def _load(self):
         try:
             with open(proxy_filename, "r") as file:
                 self.data = list(set(line.strip() for line in file.readlines() if line.strip()))
         except Exception:
-            pass
-        if not self.data:
-            self._try_auto_refresh()
+            self.data = []
+        self._last_refresh = time.time()
 
-    def _try_auto_refresh(self):
+    def _try_refresh(self):
+        if time.time() - self._last_refresh < self._REFRESH_INTERVAL:
+            return
         try:
             from instock.core.proxy_fetcher import refresh_proxy_pool
             refreshed = refresh_proxy_pool()
             if refreshed:
                 self.data = refreshed
-        except Exception:
-            pass
+                self._last_refresh = time.time()
         except Exception:
             pass
 
     def get_data(self):
+        self._try_refresh()
         return self.data
 
     def get_proxies(self):
-        if self.data is None or len(self.data) == 0:
-            return {"http": None, "https": None, "ftp": None}
+        self._try_refresh()
+        if not self.data:
+            return {"http": None, "https": None}
 
         proxy = random.choice(self.data)
         return {"http": proxy, "https": proxy}

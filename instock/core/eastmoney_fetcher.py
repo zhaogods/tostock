@@ -32,7 +32,6 @@ class eastmoney_fetcher:
         """初始化获取器"""
         self.base_dir = os.path.dirname(os.path.dirname(__file__))
         self.session = self._create_session()
-        self.proxies = proxys().get_proxies()
 
     def _get_cookie(self):
         """
@@ -101,7 +100,7 @@ class eastmoney_fetcher:
             try:
                 response = self.session.get(
                     url,
-                    proxies=self.proxies,
+                    proxies=proxys().get_proxies(),
                     params=params,
                     timeout=timeout
                 )
@@ -130,7 +129,7 @@ class eastmoney_fetcher:
             try:
                 response = self.session.post(
                     url,
-                    proxies=self.proxies,
+                    proxies=proxys().get_proxies(),
                     params=params,
                     data=data,
                     json=json,
