@@ -61,20 +61,23 @@ def _validate_proxies(proxies, timeout=5):
 
 
 def _test_proxy(proxy, timeout=8):
-    try:
-        r = requests.get(
-            "http://push2.eastmoney.com/api/qt/clist/get",
-            proxies={"http": proxy, "https": proxy},
-            timeout=timeout,
-            params={"pn": "1", "pz": "1", "po": "1", "np": "1",
-                    "fltt": "2", "invt": "2", "fid": "f12",
-                    "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048",
-                    "fields": "f12", "ut": "bd1d9ddb04089700cf9c27f6f7426281"},
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        return r.status_code in (200, 502)
-    except Exception:
-        return False
+    test_targets = [
+        "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "http://push2.eastmoney.com/api/qt/clist/get",
+    ]
+    for url in test_targets:
+        try:
+            r = requests.get(
+                url,
+                proxies={"http": proxy, "https": proxy},
+                timeout=timeout,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            if r.status_code not in (200, 502):
+                return False
+        except Exception:
+            return False
+    return True
 
 
 def _write_proxy_file(proxies):
