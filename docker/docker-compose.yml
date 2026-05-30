@@ -12,7 +12,7 @@ services:
       - instock_network
 
   instock:
-    image: mayanghua/instock:latest
+    image: zsswwz/tostock:latest
     container_name: InStock
     ports:
       - "9988:9988"

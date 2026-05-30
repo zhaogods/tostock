@@ -49,7 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - README documents a `docker run` flow rather than a compose-first workflow:
   - `docker network create InStockService`
   - `docker run -d --name InStockDbService --network InStockService -v /data/mariadb/data:/var/lib/instockdb -e MYSQL_ROOT_PASSWORD=root library/mariadb:latest`
-  - `docker run -dit --name InStock --network=InStockService -p 9988:9988 -v /data/instockproxy.txt:/data/InStock/instock/config/proxy.txt -v /data/eastmoneycookie.txt:/data/InStock/instock/config/eastmoney_cookie.txt -v /data/tushare.json:/data/InStock/instock/config/tushare.json -e db_host=InStockDbService mayanghua/instock:latest`
+  - `docker run -dit --name InStock --network=InStockService -p 9988:9988 -v /data/instockproxy.txt:/data/InStock/instock/config/proxy.txt -v /data/eastmoneycookie.txt:/data/InStock/instock/config/eastmoney_cookie.txt -v /data/tushare.json:/data/InStock/instock/config/tushare.json -e db_host=InStockDbService zsswwz/tostock:latest`
 - A compose file exists at `docker/docker-compose.yml` if you want to inspect the default two-container layout.
 - `docker/build.sh` is not a generic repo-root build script: it assembles a custom build context using `../../stock` before invoking `docker build`.
 
