@@ -13,94 +13,82 @@ __author__ = "myh "
 __date__ = "2026/5/29 "
 
 _PROXY_FILE = Path(os.path.join(
-    os.path.dirname(__file__), "config", "proxy.txt"))
+    os.path.dirname(__file__), "..", "config", "proxy.txt")).resolve()
 
-_API_DEFAULTS = {
-    "uid": os.environ.get("XIEQU_UID", ""),
-    "vkey": os.environ.get("XIEQU_VKEY", ""),
-    "num": os.environ.get("XIEQU_NUM", "5"),
-    "time": os.environ.get("XIEQU_TIME", "30"),
-}
-
-_API_BASE = "http://api.xiequ.cn/VAD/GetIp.aspx"
+_API_URL = os.environ.get("XIEQU_API_URL", "")
 
 
-def fetch_proxies(uid=None, vkey=None, num=None, time_sec=None):
-    api_uid = uid or _API_DEFAULTS["uid"]
-    api_vkey = vkey or _API_DEFAULTS["vkey"]
-    api_num = num or _API_DEFAULTS["num"]
-    api_time = time_sec or _API_DEFAULTS["time"]
-
-    if not api_uid or not api_vkey:
-        logging.warning("proxy_fetcher: XIEQU_UID/XIEQU_VKEY 未配置，跳过代理提取")
+def refresh_proxy_pool():
+    """从携趣 API 获取代理并验证，写入 proxy.txt。返回可用代理列表。"""
+    if not _API_URL:
         return []
 
-    params = {
-        "act": "get",
-        "uid": api_uid,
-        "vkey": api_vkey,
-        "num": api_num,
-        "time": api_time,
-        "plat": "1",
-        "re": "1",
-        "type": "2",
-        "so": "1",
-        "ow": "1",
-        "spl": "1",
-        "addr": "",
-        "db": "1",
-    }
-
     try:
-        r = requests.get(_API_BASE, params=params, timeout=15)
+        r = requests.get(_API_URL, timeout=15)
         r.raise_for_status()
         text = r.text.strip()
     except Exception as e:
-        logging.error(f"proxy_fetcher: API 请求失败 {e}")
+        logging.warning(f"proxy_fetcher: API 请求失败 {e}")
         return []
 
     if not text or text.startswith("-"):
-        logging.warning(f"proxy_fetcher: API 返回异常: {text}")
+        logging.warning(f"proxy_fetcher: API 返回异常: {text[:200]}")
         return []
 
     proxies = [line.strip() for line in text.splitlines() if line.strip()]
     logging.info(f"proxy_fetcher: 获取到 {len(proxies)} 个代理")
 
-    valid = validate_proxies(proxies)
+    valid = _validate_proxies(proxies)
     if valid:
-        write_proxy_file(valid)
+        _write_proxy_file(valid)
     return valid
 
 
-def validate_proxies(proxies, test_url="https://push2.eastmoney.com", timeout=5):
+def _validate_proxies(proxies, timeout=5):
     valid = []
     for proxy in proxies:
-        if test_proxy(proxy, test_url, timeout):
+        ok = _test_proxy(proxy, timeout)
+        if ok:
             valid.append(proxy)
-        time.sleep(random.uniform(0.3, 1))
+        time.sleep(random.uniform(0.2, 0.5))
     logging.info(f"proxy_fetcher: 验证通过 {len(valid)}/{len(proxies)}")
     return valid
 
 
-def test_proxy(proxy, test_url="https://push2.eastmoney.com", timeout=5):
+def _test_proxy(proxy, timeout=8):
     try:
         r = requests.get(
-            test_url,
+            "http://push2.eastmoney.com/api/qt/clist/get",
             proxies={"http": proxy, "https": proxy},
             timeout=timeout,
+            params={"pn": "1", "pz": "1", "po": "1", "np": "1",
+                    "fltt": "2", "invt": "2", "fid": "f12",
+                    "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048",
+                    "fields": "f12", "ut": "bd1d9ddb04089700cf9c27f6f7426281"},
             headers={"User-Agent": "Mozilla/5.0"},
         )
-        return r.status_code == 200
+        return r.status_code in (200, 502)
     except Exception:
         return False
 
 
-def write_proxy_file(proxies):
+def _write_proxy_file(proxies):
     _PROXY_FILE.parent.mkdir(parents=True, exist_ok=True)
     _PROXY_FILE.write_text("\n".join(proxies), encoding="utf-8")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    count = fetch_proxies()
+    # 自动加载项目根目录 .env
+    _env = Path(__file__).resolve().parent.parent.parent / ".env"
+    if _env.exists():
+        with open(_env, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    k, v = k.strip(), v.strip()
+                    if k and v:
+                        os.environ.setdefault(k, v)
+    count = refresh_proxy_pool()
     print(f"可用代理数: {len(count)}")

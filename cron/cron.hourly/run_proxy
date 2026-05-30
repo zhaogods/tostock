@@ -1,2 +1,2 @@
 # 每小时刷新代理池
-/usr/local/bin/python3 -c "from instock.core.proxy_fetcher import fetch_proxies; fetch_proxies()"
+/usr/local/bin/python3 -c "from instock.core.proxy_fetcher import refresh_proxy_pool; refresh_proxy_pool()"

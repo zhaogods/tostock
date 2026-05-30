@@ -25,6 +25,19 @@ class proxys(metaclass=singleton_type):
                 self.data = list(set(line.strip() for line in file.readlines() if line.strip()))
         except Exception:
             pass
+        if not self.data:
+            self._try_auto_refresh()
+
+    def _try_auto_refresh(self):
+        try:
+            from instock.core.proxy_fetcher import refresh_proxy_pool
+            refreshed = refresh_proxy_pool()
+            if refreshed:
+                self.data = refreshed
+        except Exception:
+            pass
+        except Exception:
+            pass
 
     def get_data(self):
         return self.data
