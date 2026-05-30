@@ -97,19 +97,21 @@ class eastmoney_fetcher:
         :return: 响应对象
         """
         for i in range(retry):
+            proxies = proxys().get_proxies()
             try:
                 response = self.session.get(
                     url,
-                    proxies=proxys().get_proxies(),
+                    proxies=proxies,
                     params=params,
                     timeout=timeout
                 )
-                response.raise_for_status()  # 检查HTTP错误
+                response.raise_for_status()
+                proxys().mark_ok()
                 return response
             except requests.exceptions.RequestException as e:
+                proxys().mark_failed(proxies)
                 print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
                 if i < retry - 1:
-                    # 随机延迟后重试
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
                 else:
                     raise
@@ -126,21 +128,23 @@ class eastmoney_fetcher:
         :return: 响应对象
         """
         for i in range(retry):
+            proxies = proxys().get_proxies()
             try:
                 response = self.session.post(
                     url,
-                    proxies=proxys().get_proxies(),
+                    proxies=proxies,
                     params=params,
                     data=data,
                     json=json,
                     timeout=timeout
                 )
-                response.raise_for_status()  # 检查HTTP错误
+                response.raise_for_status()
+                proxys().mark_ok()
                 return response
             except requests.exceptions.RequestException as e:
+                proxys().mark_failed(proxies)
                 print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
                 if i < retry - 1:
-                    # 随机延迟后重试
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
                 else:
                     raise

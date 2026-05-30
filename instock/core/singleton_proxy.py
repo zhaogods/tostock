@@ -4,7 +4,6 @@
 import os
 import os.path
 import sys
-import random
 import time
 from instock.lib.singleton_type import singleton_type
 
@@ -24,6 +23,7 @@ class proxys(metaclass=singleton_type):
 
     def __init__(self):
         self.data = []
+        self._cursor = 0
         self._last_refresh = 0
         self._load()
 
@@ -33,17 +33,17 @@ class proxys(metaclass=singleton_type):
                 self.data = list(set(line.strip() for line in file.readlines() if line.strip()))
         except Exception:
             self.data = []
-        if self.data:
-            self._last_refresh = time.time()
+        self._cursor = 0
 
     def _try_refresh(self):
-        if time.time() - self._last_refresh < self._REFRESH_INTERVAL:
+        if self.data and time.time() - self._last_refresh < self._REFRESH_INTERVAL:
             return
         try:
             from instock.core.proxy_fetcher import refresh_proxy_pool
             refreshed = refresh_proxy_pool()
             if refreshed:
                 self.data = refreshed
+                self._cursor = 0
                 self._last_refresh = time.time()
         except Exception:
             pass
@@ -53,12 +53,28 @@ class proxys(metaclass=singleton_type):
         return self.data
 
     def get_proxies(self):
-        self._try_refresh()
+        if not self.data:
+            self._try_refresh()
         if not self.data:
             return {"http": None, "https": None}
 
-        proxy = random.choice(self.data)
+        proxy = self.data[self._cursor % len(self.data)]
         return {"http": proxy, "https": proxy}
+
+    def mark_failed(self, proxy):
+        proxy_str = proxy.get("http", "") if isinstance(proxy, dict) else str(proxy)
+        if proxy_str in self.data:
+            self.data.remove(proxy_str)
+        self._advance()
+
+    def mark_ok(self):
+        self._advance()
+
+    def _advance(self):
+        self._cursor += 1
+        if self._cursor >= len(self.data):
+            self._cursor = 0
+            self._try_refresh()
 
 """
     def get_proxies(self):
