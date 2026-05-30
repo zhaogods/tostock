@@ -111,9 +111,9 @@ def fetch_stocks(date):
             else:
                 data.insert(0, 'date', date.strftime("%Y-%m-%d"))
         else:
-            from pandas.api.types import is_datetime64_any_dtype
-            if is_datetime64_any_dtype(data['date']):
-                data['date'] = data['date'].dt.strftime('%Y-%m-%d')
+            if not isinstance(data['date'].iloc[0], str):
+                data['date'] = data['date'].apply(
+                    lambda d: d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d))
         data.columns = list(tbs.TABLE_CN_STOCK_SPOT['columns'])
         data = data.loc[data['code'].apply(is_a_stock)].loc[data['new_price'].apply(is_open)]
         return data
