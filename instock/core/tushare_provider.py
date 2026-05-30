@@ -12,6 +12,13 @@ import tushare as ts
 
 
 class TushareProvider:
+    _RATE_LIMITS = {
+        'daily':       int(os.environ.get('TUSHARE_DAILY_RATE', '400')),
+        'daily_basic': int(os.environ.get('TUSHARE_DAILY_BASIC_RATE', '150')),
+        'moneyflow':   int(os.environ.get('TUSHARE_MONEYFLOW_RATE', '150')),
+        'stock_basic': int(os.environ.get('TUSHARE_STOCK_BASIC_RATE', '40')),
+    }
+
     STOCK_SPOT_COLUMNS = (
         'date', 'code', 'name', 'new_price', 'change_rate', 'ups_downs',
         'volume', 'deal_amount', 'amplitude', 'turnoverrate', 'volume_ratio',
@@ -34,6 +41,17 @@ class TushareProvider:
             )
         ts.set_token(token)
         self.pro = ts.pro_api()
+        self._last_call = {}
+
+    def _throttle(self, api_name):
+        rate = self._RATE_LIMITS.get(api_name, 200)
+        now = __import__('time').time()
+        last = self._last_call.get(api_name, 0)
+        interval = 60.0 / rate
+        wait = interval - (now - last)
+        if wait > 0:
+            __import__('time').sleep(wait)
+        self._last_call[api_name] = __import__('time').time()
 
     @staticmethod
     def _read_token():
@@ -63,6 +81,7 @@ class TushareProvider:
     def _get_stock_names(self):
         if hasattr(self, '_stock_names_cache'):
             return self._stock_names_cache
+        self._throttle('stock_basic')
         try:
             basic = self.pro.stock_basic(
                 exchange='', list_status='L',
@@ -79,6 +98,7 @@ class TushareProvider:
     # ---- 股票实时行情 ----
     def fetch_stock_spot(self, date):
         date_str = date.strftime('%Y%m%d')
+        self._throttle('daily')
         try:
             daily = self.pro.daily(trade_date=date_str)
         except Exception as e:
@@ -87,6 +107,7 @@ class TushareProvider:
         if daily is None or daily.empty:
             return None
 
+        self._throttle('daily_basic')
         try:
             basic = self.pro.daily_basic(ts_code='', trade_date=date_str)
         except Exception:
@@ -174,6 +195,7 @@ class TushareProvider:
         if date is None:
             date = datetime.date.today()
         trade_date = date.strftime('%Y%m%d')
+        self._throttle('moneyflow')
         try:
             mf = self.pro.moneyflow(trade_date=trade_date)
         except Exception as e:
@@ -291,6 +313,7 @@ class TushareProvider:
         return count
 
     def _get_all_codes(self):
+        self._throttle('stock_basic')
         try:
             basic = self.pro.stock_basic(
                 exchange='', list_status='L', fields='ts_code')
