@@ -22,7 +22,7 @@ def _fallback_stock_list():
             return None
         import datetime
         today = datetime.date.today().strftime('%Y-%m-%d')
-        data = pd.DataFrame({'date': today, 'code': codes, 'name': ''})
+        data = pd.DataFrame({'date': [today] * len(codes), 'code': codes, 'name': ''})
         data['new_price'] = np.nan
         return data
     except Exception:
