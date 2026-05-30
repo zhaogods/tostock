@@ -216,6 +216,90 @@ class TushareProvider:
         result['今日小单净流入-净占比'] = 0.0
         return result
 
+    # ---- 股票历史行情（单股）----
+    def fetch_stock_hist(self, code, start_date, end_date,
+                         period='daily', adjust='qfq'):
+        ts_code = self.to_ts_code(code)
+        try:
+            df = self.pro.daily(
+                ts_code=ts_code, start_date=start_date, end_date=end_date)
+        except Exception as e:
+            logging.warning(f"Tushare daily({code}) 失败：{e}")
+            return None
+        if df is None or df.empty:
+            return None
+
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+
+        result = pd.DataFrame()
+        result['日期'] = df['trade_date'].dt.date
+        result['开盘'] = pd.to_numeric(df['open'], errors='coerce')
+        result['收盘'] = pd.to_numeric(df['close'], errors='coerce')
+        result['最高'] = pd.to_numeric(df['high'], errors='coerce')
+        result['最低'] = pd.to_numeric(df['low'], errors='coerce')
+        result['成交量'] = pd.to_numeric(df['vol'], errors='coerce')
+        result['成交额'] = pd.to_numeric(df['amount'], errors='coerce')
+        pre_close = pd.to_numeric(df['pre_close'], errors='coerce')
+        high = pd.to_numeric(df['high'], errors='coerce')
+        low = pd.to_numeric(df['low'], errors='coerce')
+        result['振幅'] = np.where(
+            (pre_close > 0) & high.notna() & low.notna(),
+            (high - low) / pre_close * 100, 0.0)
+        result['涨跌幅'] = pd.to_numeric(df['pct_chg'], errors='coerce')
+        result['涨跌额'] = pd.to_numeric(df['change'], errors='coerce')
+        result['换手率'] = 0.0
+        result = result.sort_values('日期').reset_index(drop=True)
+        return result
+
+    # ---- 批量填充历史缓存 ----
+    def fill_hist_cache(self, start_date, end_date, adjust='qfq'):
+        import os as _os
+        import time as _time
+
+        codes = self._get_all_codes()
+        if not codes:
+            logging.warning("无法获取股票列表，批量填充取消")
+            return 0
+
+        cache_root = _os.path.join(
+            _os.path.dirname(_os.path.dirname(__file__)), 'cache', 'hist')
+        _os.makedirs(cache_root, exist_ok=True)
+
+        cache_dir = _os.path.join(cache_root, start_date[:6], start_date)
+        _os.makedirs(cache_dir, exist_ok=True)
+
+        count = 0
+        total = len(codes)
+        rate_limit = int(_os.environ.get('TUSHARE_RATE_LIMIT', '400'))
+
+        for i, code in enumerate(codes):
+            cache_file = _os.path.join(
+                cache_dir, f"{code}{adjust}.gzip.pickle")
+            if _os.path.isfile(cache_file):
+                count += 1
+                continue
+
+            df = self.fetch_stock_hist(code, start_date, end_date, adjust=adjust)
+            if df is not None and not df.empty:
+                df.to_pickle(cache_file, compression='gzip')
+                count += 1
+
+            if (i + 1) % rate_limit == 0:
+                _time.sleep(60)
+
+        logging.info(f"历史缓存填充完成: {count}/{total} 只股票已缓存")
+        return count
+
+    def _get_all_codes(self):
+        try:
+            basic = self.pro.stock_basic(
+                exchange='', list_status='L', fields='ts_code')
+            if basic is not None and not basic.empty:
+                return sorted(basic['ts_code'].apply(self.from_ts_code).tolist())
+        except Exception:
+            pass
+        return []
+
     @staticmethod
     def _safe_numeric(df, column, default=0.0):
         if column in df.columns:

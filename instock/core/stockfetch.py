@@ -388,7 +388,11 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
         if os.path.isfile(cache_file):
             return pd.read_pickle(cache_file, compression="gzip")
         else:
-            if date_end is not None:
+            if ts_provider is not None:
+                end_d = date_end if date_end else datetime.date.today().strftime('%Y%m%d')
+                stock = ts_provider.fetch_stock_hist(
+                    code=code, start_date=date_start, end_date=end_d, adjust=adjust)
+            elif date_end is not None:
                 stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, end_date=date_end,
                                             adjust=adjust)
             else:
