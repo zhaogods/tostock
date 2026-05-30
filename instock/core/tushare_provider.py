@@ -60,6 +60,22 @@ class TushareProvider:
     def from_ts_code(ts_code):
         return ts_code.split('.')[0]
 
+    def _get_stock_names(self):
+        if hasattr(self, '_stock_names_cache'):
+            return self._stock_names_cache
+        try:
+            basic = self.pro.stock_basic(
+                exchange='', list_status='L',
+                fields='ts_code,name')
+            if basic is not None and not basic.empty:
+                basic['code'] = basic['ts_code'].apply(self.from_ts_code)
+                self._stock_names_cache = dict(zip(basic['code'], basic['name']))
+            else:
+                self._stock_names_cache = {}
+        except Exception:
+            self._stock_names_cache = {}
+        return self._stock_names_cache
+
     # ---- 股票实时行情 ----
     def fetch_stock_spot(self, date):
         date_str = date.strftime('%Y%m%d')
@@ -81,10 +97,12 @@ class TushareProvider:
         else:
             df = daily.copy()
 
+        names = self._get_stock_names()
+
         result = pd.DataFrame()
         result['date'] = pd.to_datetime(df['trade_date']).dt.date
         result['code'] = df['ts_code'].apply(self.from_ts_code)
-        result['name'] = ''
+        result['name'] = result['code'].map(names).fillna('')
         result['new_price'] = pd.to_numeric(df['close'], errors='coerce')
         result['change_rate'] = pd.to_numeric(df['pct_chg'], errors='coerce')
         result['ups_downs'] = pd.to_numeric(df['change'], errors='coerce')
