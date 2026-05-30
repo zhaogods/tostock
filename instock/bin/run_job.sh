@@ -1,9 +1,9 @@
 #!/bin/sh
 
-#export PYTHONPATH=/data/InStock
+#export PYTHONPATH=/data/tostock
 
 #nohup  &
-/usr/local/bin/python3 /data/InStock/instock/job/execute_daily_job.py
+/usr/local/bin/python3 /data/tostock/instock/job/execute_daily_job.py
 
 echo ------整体作业 支持批量作业------
 echo 当前时间作业 python execute_daily_job.py

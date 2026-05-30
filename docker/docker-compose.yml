@@ -21,8 +21,8 @@ services:
     environment:
       db_host: InStockDbService
     volumes:
-      - /data/instockproxy.txt:/data/InStock/instock/config/proxy.txt
-      - /data/eastmoneycookie.txt:/data/InStock/instock/config/eastmoney_cookie.txt
+      - /data/instockproxy.txt:/data/tostock/instock/config/proxy.txt
+      - /data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt
     depends_on:
       - instockdbservice
     networks:

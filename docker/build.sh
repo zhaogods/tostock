@@ -1,11 +1,11 @@
 #!/bin/sh
 
-rm -rf stock
-rsync -av --progress ../../stock . --exclude .git --exclude .idea --exclude *.md --exclude *.bat --exclude __pycache__ --exclude .gitignore --exclude stock/cron --exclude stock/img --exclude stock/docker --exclude instock/cache --exclude instock/log --exclude instock/test
+rm -rf tostock
+rsync -av --progress ../../tostock . --exclude .git --exclude .idea --exclude *.md --exclude *.bat --exclude __pycache__ --exclude .gitignore --exclude tostock/cron --exclude tostock/img --exclude tostock/docker --exclude instock/cache --exclude instock/log --exclude instock/test --exclude .env --exclude instock/config/database.json --exclude instock/config/tushare.json
 rm -rf cron
-cp -r ../../stock/cron .
+cp -r ../../tostock/cron .
 
-DOCKER_NAME=mayanghua/instock
+DOCKER_NAME=zhaogods/tostock
 TAG1=$(date "+%Y%m")
 TAG2=latest
 
