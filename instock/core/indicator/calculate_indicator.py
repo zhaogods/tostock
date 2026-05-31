@@ -10,6 +10,11 @@ __author__ = 'myh '
 __date__ = '2023/3/10 '
 
 
+def _na_fill(series):
+    """NaN/Inf 替换为 0，兼容 pandas 3.0 CoW（不可禁用 .values 写保护）"""
+    return series.fillna(0.0).replace([np.inf, -np.inf], 0.0)
+
+
 def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
     try:
         isCopy = False
@@ -33,30 +38,30 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             # macd
             data.loc[:, 'macd'], data.loc[:, 'macds'], data.loc[:, 'macdh'] = tl.MACD(
                 data['close'].values, fastperiod=12, slowperiod=26, signalperiod=9)
-            data['macd'].values[np.isnan(data['macd'].values)] = 0.0
-            data['macds'].values[np.isnan(data['macds'].values)] = 0.0
-            data['macdh'].values[np.isnan(data['macdh'].values)] = 0.0
+            data.loc[:, 'macd'] = _na_fill(data['macd'])
+            data.loc[:, 'macds'] = _na_fill(data['macds'])
+            data.loc[:, 'macdh'] = _na_fill(data['macdh'])
 
             # kdjk
             data.loc[:, 'kdjk'], data.loc[:, 'kdjd'] = tl.STOCH(
                 data['high'].values, data['low'].values, data['close'].values, fastk_period=9,
                 slowk_period=5, slowk_matype=1, slowd_period=5, slowd_matype=1)
-            data['kdjk'].values[np.isnan(data['kdjk'].values)] = 0.0
-            data['kdjd'].values[np.isnan(data['kdjd'].values)] = 0.0
+            data.loc[:, 'kdjk'] = _na_fill(data['kdjk'])
+            data.loc[:, 'kdjd'] = _na_fill(data['kdjd'])
             data.loc[:, 'kdjj'] = 3 * data['kdjk'].values - 2 * data['kdjd'].values
 
             # boll 计算结果和stockstats不同boll_ub,boll_lb
             data.loc[:, 'boll_ub'], data.loc[:, 'boll'], data.loc[:, 'boll_lb'] = tl.BBANDS \
                 (data['close'].values, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
-            data['boll_ub'].values[np.isnan(data['boll_ub'].values)] = 0.0
-            data['boll'].values[np.isnan(data['boll'].values)] = 0.0
-            data['boll_lb'].values[np.isnan(data['boll_lb'].values)] = 0.0
+            data.loc[:, 'boll_ub'] = _na_fill(data['boll_ub'])
+            data.loc[:, 'boll'] = _na_fill(data['boll'])
+            data.loc[:, 'boll_lb'] = _na_fill(data['boll_lb'])
 
             # trix
             data.loc[:, 'trix'] = tl.TRIX(data['close'].values, timeperiod=12)
-            data['trix'].values[np.isnan(data['trix'].values)] = 0.0
+            data.loc[:, 'trix'] = _na_fill(data['trix'])
             data.loc[:, 'trix_20_sma'] = tl.MA(data['trix'].values, timeperiod=20)
-            data['trix_20_sma'].values[np.isnan(data['trix_20_sma'].values)] = 0.0
+            data.loc[:, 'trix_20_sma'] = _na_fill(data['trix_20_sma'])
 
             # cr
             data.loc[:, 'm_price'] = data['amount'].values / data['volume'].values
@@ -66,25 +71,23 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             data.loc[:, 'h_m_sum'] = tl.SUM(data['h_m'].values, timeperiod=26)
             data.loc[:, 'm_l_sum'] = tl.SUM(data['m_l'].values, timeperiod=26)
             data.loc[:, 'cr'] = data['h_m_sum'].values / data['m_l_sum'].values
-            data['cr'].values[np.isnan(data['cr'].values)] = 0.0
-            data['cr'].values[np.isinf(data['cr'].values)] = 0.0
-            data['cr'] = data['cr'].values * 100
+            data.loc[:, 'cr'] = _na_fill(data['cr']) * 100
             data.loc[:, 'cr-ma1'] = tl.MA(data['cr'].values, timeperiod=5)
-            data['cr-ma1'].values[np.isnan(data['cr-ma1'].values)] = 0.0
+            data.loc[:, 'cr-ma1'] = _na_fill(data['cr-ma1'])
             data.loc[:, 'cr-ma2'] = tl.MA(data['cr'].values, timeperiod=10)
-            data['cr-ma2'].values[np.isnan(data['cr-ma2'].values)] = 0.0
+            data.loc[:, 'cr-ma2'] = _na_fill(data['cr-ma2'])
             data.loc[:, 'cr-ma3'] = tl.MA(data['cr'].values, timeperiod=20)
-            data['cr-ma3'].values[np.isnan(data['cr-ma3'].values)] = 0.0
+            data.loc[:, 'cr-ma3'] = _na_fill(data['cr-ma3'])
 
             # rsi
             data.loc[:, 'rsi'] = tl.RSI(data['close'].values, timeperiod=14)
-            data['rsi'].values[np.isnan(data['rsi'].values)] = 0.0
+            data.loc[:, 'rsi'] = _na_fill(data['rsi'])
             data.loc[:, 'rsi_6'] = tl.RSI(data['close'].values, timeperiod=6)
-            data['rsi_6'].values[np.isnan(data['rsi_6'].values)] = 0.0
+            data.loc[:, 'rsi_6'] = _na_fill(data['rsi_6'])
             data.loc[:, 'rsi_12'] = tl.RSI(data['close'].values, timeperiod=12)
-            data['rsi_12'].values[np.isnan(data['rsi_12'].values)] = 0.0
+            data.loc[:, 'rsi_12'] = _na_fill(data['rsi_12'])
             data.loc[:, 'rsi_24'] = tl.RSI(data['close'].values, timeperiod=24)
-            data['rsi_24'].values[np.isnan(data['rsi_24'].values)] = 0.0
+            data.loc[:, 'rsi_24'] = _na_fill(data['rsi_24'])
 
             # vr
             data.loc[:, 'av'] = np.where(data['p_change'].values > 0, data['volume'].values, 0)
@@ -94,11 +97,9 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             data.loc[:, 'cv'] = np.where(data['p_change'].values == 0, data['volume'].values, 0)
             data.loc[:, 'cvs'] = tl.SUM(data['cv'].values, timeperiod=26)
             data.loc[:, 'vr'] = (data['avs'].values + data['cvs'].values / 2) / (data['bvs'].values + data['cvs'].values / 2)
-            data['vr'].values[np.isnan(data['vr'].values)] = 0.0
-            data['vr'].values[np.isinf(data['vr'].values)] = 0.0
-            data['vr'] = data['vr'].values * 100
+            data.loc[:, 'vr'] = _na_fill(data['vr']) * 100
             data.loc[:, 'vr_6_sma'] = tl.MA(data['vr'].values, timeperiod=6)
-            data['vr_6_sma'].values[np.isnan(data['vr_6_sma'].values)] = 0.0
+            data.loc[:, 'vr_6_sma'] = _na_fill(data['vr_6_sma'])
 
             # atr
             data.loc[:, 'prev_close'] = data['close'].shift(1, fill_value=0.0).values
@@ -108,94 +109,87 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             data.loc[:, 'h_cy_a'] = abs(data['h_cy'].values)
             data.loc[:, 'cy_l_a'] = abs(data['cy_l'].values)
             data.loc[:, 'tr'] = data.loc[:, ['h_l', 'h_cy_a', 'cy_l_a']].T.max().values
-            data['tr'].values[np.isnan(data['tr'].values)] = 0.0
+            data.loc[:, 'tr'] = _na_fill(data['tr'])
             data.loc[:, 'atr'] = tl.ATR(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)
-            data['atr'].values[np.isnan(data['atr'].values)] = 0.0
+            data.loc[:, 'atr'] = _na_fill(data['atr'])
 
             # DMI
             # talib计算公式和stockstats不同
             # talib计算公式
             # data.loc[:, 'pdi'] = tl.PLUS_DI(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)
-            # data['pdi'].values[np.isnan(data['pdi'].values)] = 0.0
+            # data.loc[:, 'pdi'] = _na_fill(data['pdi'])
             # data.loc[:, 'mdi'] = tl.MINUS_DI(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)
-            # data['mdi'].values[np.isnan(data['mdi'].values)] = 0.0
+            # data.loc[:, 'mdi'] = _na_fill(data['mdi'])
             # data.loc[:, 'dx'] = tl.DX(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)
-            # data['dx'].values[np.isnan(data['dx'].values)] = 0.0
+            # data.loc[:, 'dx'] = _na_fill(data['dx'])
             # data.loc[:, 'adx'] = tl.ADX(data['high'].values, data['low'].values, data['close'].values, timeperiod=6)
-            # data['adx'].values[np.isnan(data['adx'].values)] = 0.0
+            # data.loc[:, 'adx'] = _na_fill(data['adx'])
             # data.loc[:, 'adxr'] = tl.ADXR(data['high'].values, data['low'].values, data['close'].values, timeperiod=6)
-            # data['adxr'].values[np.isnan(data['adxr'].values)] = 0.0
+            # data.loc[:, 'adxr'] = _na_fill(data['adxr'])
             # stockstats计算公式
             data.loc[:, 'high_delta'] = np.insert(np.diff(data['high'].values), 0, 0.0)
             data.loc[:, 'high_m'] = (data['high_delta'].values + abs(data['high_delta'].values)) / 2
             data.loc[:, 'low_delta'] = np.insert(-np.diff(data['low'].values), 0, 0.0)
             data.loc[:, 'low_m'] = (data['low_delta'].values + abs(data['low_delta'].values)) / 2
             data.loc[:, 'pdm'] = tl.EMA(np.where(data['high_m'].values > data['low_m'].values, data['high_m'].values, 0), timeperiod=14)
-            data['pdm'].values[np.isnan(data['pdm'].values)] = 0.0
+            data.loc[:, 'pdm'] = _na_fill(data['pdm'])
             data.loc[:, 'pdi'] = data['pdm'].values / data['atr'].values
-            data['pdi'].values[np.isnan(data['pdi'].values)] = 0.0
-            data['pdi'].values[np.isinf(data['pdi'].values)] = 0.0
-            data['pdi'] = data['pdi'].values * 100
+            data.loc[:, 'pdi'] = _na_fill(data['pdi']) * 100
             data.loc[:, 'mdm'] = tl.EMA(np.where(data['low_m'].values > data['high_m'].values, data['low_m'].values, 0), timeperiod=14)
-            data['mdm'].values[np.isnan(data['mdm'].values)] = 0.0
+            data.loc[:, 'mdm'] = _na_fill(data['mdm'])
             data.loc[:, 'mdi'] = data['mdm'].values / data['atr'].values
-            data['mdi'].values[np.isnan(data['mdi'].values)] = 0.0
-            data['mdi'].values[np.isinf(data['mdi'].values)] = 0.0
-            data['mdi'] = data['mdi'].values * 100
+            data.loc[:, 'mdi'] = _na_fill(data['mdi']) * 100
             data.loc[:, 'dx'] = abs(data['pdi'].values - data['mdi'].values) / (data['pdi'].values + data['mdi'].values)
-            data['dx'].values[np.isnan(data['dx'].values)] = 0.0
-            data['dx'].values[np.isinf(data['dx'].values)] = 0.0
-            data['dx'] = data['dx'].values * 100
+            data.loc[:, 'dx'] = _na_fill(data['dx']) * 100
             data.loc[:, 'adx'] = tl.EMA(data['dx'].values, timeperiod=6)
-            data['adx'].values[np.isnan(data['adx'].values)] = 0.0
+            data.loc[:, 'adx'] = _na_fill(data['adx'])
             data.loc[:, 'adxr'] = tl.EMA(data['adx'].values, timeperiod=6)
-            data['adxr'].values[np.isnan(data['adxr'].values)] = 0.0
+            data.loc[:, 'adxr'] = _na_fill(data['adxr'])
 
             # wr
             data.loc[:, 'wr_6'] = tl.WILLR(data['high'].values, data['low'].values, data['close'].values, timeperiod=6)
-            data['wr_6'].values[np.isnan(data['wr_6'].values)] = 0.0
+            data.loc[:, 'wr_6'] = _na_fill(data['wr_6'])
             data.loc[:, 'wr_10'] = tl.WILLR(data['high'].values, data['low'].values, data['close'].values, timeperiod=10)
-            data['wr_10'].values[np.isnan(data['wr_10'].values)] = 0.0
+            data.loc[:, 'wr_10'] = _na_fill(data['wr_10'])
             data.loc[:, 'wr_14'] = tl.WILLR(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)
-            data['wr_14'].values[np.isnan(data['wr_14'].values)] = 0.0
+            data.loc[:, 'wr_14'] = _na_fill(data['wr_14'])
 
             # cci 计算方法和结果和stockstats不同，stockstats典型价采用均价(总额/成交量)计算
             data.loc[:, 'cci'] = tl.CCI(data['high'].values, data['low'].values, data['close'].values, timeperiod=14)
-            data['cci'].values[np.isnan(data['cci'].values)] = 0.0
+            data.loc[:, 'cci'] = _na_fill(data['cci'])
             data.loc[:, 'cci_84'] = tl.CCI(data['high'].values, data['low'].values, data['close'].values, timeperiod=84)
-            data['cci_84'].values[np.isnan(data['cci_84'].values)] = 0.0
+            data.loc[:, 'cci_84'] = _na_fill(data['cci_84'])
 
             # dma
             data.loc[:, 'ma10'] = tl.MA(data['close'].values, timeperiod=10)
-            data['ma10'].values[np.isnan(data['ma10'].values)] = 0.0
+            data.loc[:, 'ma10'] = _na_fill(data['ma10'])
             data.loc[:, 'ma50'] = tl.MA(data['close'].values, timeperiod=50)
-            data['ma50'].values[np.isnan(data['ma50'].values)] = 0.0
+            data.loc[:, 'ma50'] = _na_fill(data['ma50'])
             data.loc[:, 'dma'] = data['ma10'].values - data['ma50'].values
             data.loc[:, 'dma_10_sma'] = tl.MA(data['dma'].values, timeperiod=10)
-            data['dma_10_sma'].values[np.isnan(data['dma_10_sma'].values)] = 0.0
+            data.loc[:, 'dma_10_sma'] = _na_fill(data['dma_10_sma'])
 
             # tema
             data.loc[:, 'tema'] = tl.TEMA(data['close'].values, timeperiod=14)
-            data['tema'].values[np.isnan(data['tema'].values)] = 0.0
+            data.loc[:, 'tema'] = _na_fill(data['tema'])
 
             # mfi 计算方法和结果和stockstats不同，stockstats典型价采用均价(总额/成交量)计算
             data.loc[:, 'mfi'] = tl.MFI(data['high'].values, data['low'].values, data['close'].values, data['volume'].values, timeperiod=14)
-            data['mfi'].values[np.isnan(data['mfi'].values)] = 0.0
+            data.loc[:, 'mfi'] = _na_fill(data['mfi'])
             data.loc[:, 'mfisma'] = tl.MA(data['mfi'].values, timeperiod=6)
 
             # vwma
             data.loc[:, 'tpv_14'] = tl.SUM(data['amount'].values, timeperiod=14)
             data.loc[:, 'vol_14'] = tl.SUM(data['volume'].values, timeperiod=14)
             data.loc[:, 'vwma'] = data['tpv_14'].values / data['vol_14'].values
-            data['vwma'].values[np.isnan(data['vwma'].values)] = 0.0
-            data['vwma'].values[np.isinf(data['vwma'].values)] = 0.0
+            data.loc[:, 'vwma'] = _na_fill(data['vwma'])
             data.loc[:, 'mvwma'] = tl.MA(data['vwma'].values, timeperiod=6)
 
             # ppo
             data.loc[:, 'ppo'] = tl.PPO(data['close'].values, fastperiod=12, slowperiod=26, matype=1)
-            data['ppo'].values[np.isnan(data['ppo'].values)] = 0.0
+            data.loc[:, 'ppo'] = _na_fill(data['ppo'])
             data.loc[:, 'ppos'] = tl.EMA(data['ppo'].values, timeperiod=9)
-            data['ppos'].values[np.isnan(data['ppos'].values)] = 0.0
+            data.loc[:, 'ppos'] = _na_fill(data['ppos'])
             data.loc[:, 'ppoh'] = data['ppo'].values - data['ppos'].values
 
             # stochrsi
@@ -205,22 +199,19 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             data.loc[:, 'rsi_min'] = tl.MIN(data['rsi'].values, timeperiod=14)
             data.loc[:, 'rsi_max'] = tl.MAX(data['rsi'].values, timeperiod=14)
             data.loc[:, 'stochrsi_k'] = (data['rsi'].values - data['rsi_min'].values) / (data['rsi_max'].values - data['rsi_min'].values)
-            data['stochrsi_k'].values[np.isnan(data['stochrsi_k'].values)] = 0.0
-            data['stochrsi_k'].values[np.isinf(data['stochrsi_k'].values)] = 0.0
-            data['stochrsi_k'] = data['stochrsi_k'].values * 100
+            data.loc[:, 'stochrsi_k'] = _na_fill(data['stochrsi_k']) * 100
             data.loc[:, 'stochrsi_d'] = tl.MA(data['stochrsi_k'].values, timeperiod=3)
 
             # wt
             data.loc[:, 'esa'] = tl.EMA(data['m_price'].values, timeperiod=10)
-            data['esa'].values[np.isnan(data['esa'].values)] = 0.0
+            data.loc[:, 'esa'] = _na_fill(data['esa'])
             data.loc[:, 'esa_d'] = tl.EMA(abs(data['m_price'].values - data['esa'].values), timeperiod=10)
             data.loc[:, 'esa_ci'] = (data['m_price'].values - data['esa'].values) / (0.015 * data['esa_d'].values)
-            data['esa_ci'].values[np.isnan(data['esa_ci'].values)] = 0.0
-            data['esa_ci'].values[np.isinf(data['esa_ci'].values)] = 0.0
+            data.loc[:, 'esa_ci'] = _na_fill(data['esa_ci'])
             data.loc[:, 'wt1'] = tl.EMA(data['esa_ci'].values, timeperiod=21)
-            data['wt1'].values[np.isnan(data['wt1'].values)] = 0.0
+            data.loc[:, 'wt1'] = _na_fill(data['wt1'])
             data.loc[:, 'wt2'] = tl.MA(data['wt1'].values, timeperiod=4)
-            data['wt2'].values[np.isnan(data['wt2'].values)] = 0.0
+            data.loc[:, 'wt2'] = _na_fill(data['wt2'])
 
             # Supertrend
             data.loc[:, 'm_atr'] = data['atr'].values * 3
@@ -280,27 +271,26 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             # ----------stockstats没有以下指标-----------------
             # roc
             data.loc[:, 'roc'] = tl.ROC(data['close'].values, timeperiod=12)
-            data['roc'].values[np.isnan(data['roc'].values)] = 0.0
+            data.loc[:, 'roc'] = _na_fill(data['roc'])
             data.loc[:, 'rocma'] = tl.MA(data['roc'].values, timeperiod=6)
-            data['rocma'].values[np.isnan(data['rocma'].values)] = 0.0
+            data.loc[:, 'rocma'] = _na_fill(data['rocma'])
             data.loc[:, 'rocema'] = tl.EMA(data['roc'].values, timeperiod=9)
-            data['rocema'].values[np.isnan(data['rocema'].values)] = 0.0
+            data.loc[:, 'rocema'] = _na_fill(data['rocema'])
 
             # obv
             data.loc[:, 'obv'] = tl.OBV(data['close'].values, data['volume'].values)
-            data['obv'].values[np.isnan(data['obv'].values)] = 0.0
+            data.loc[:, 'obv'] = _na_fill(data['obv'])
 
             # sar
             data.loc[:, 'sar'] = tl.SAR(data['high'].values, data['low'].values)
-            data['sar'].values[np.isnan(data['sar'].values)] = 0.0
+            data.loc[:, 'sar'] = _na_fill(data['sar'])
 
             # psy
             data.loc[:, 'price_up'] = 0.0
             data.loc[data['close'].values > data['prev_close'].values, 'price_up'] = 1.0
             data.loc[:, 'price_up_sum'] = tl.SUM(data['price_up'].values, timeperiod=12)
             data.loc[:, 'psy'] = data['price_up_sum'].values / 12.0
-            data['psy'].values[np.isnan(data['psy'].values)] = 0.0
-            data['psy'] = data['psy'].values * 100
+            data.loc[:, 'psy'] = _na_fill(data['psy']) * 100
             data.loc[:, 'psyma'] = tl.MA(data['psy'].values, timeperiod=6)
 
             # BRAR
@@ -308,16 +298,12 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             data.loc[:, 'o_l'] = data['open'].values - data['low'].values
             data.loc[:, 'h_o_sum'] = tl.SUM(data['h_o'].values, timeperiod=26)
             data.loc[:, 'o_l_sum'] = tl.SUM(data['o_l'].values, timeperiod=26)
-            data.loc[:, 'ar'] = data['h_o_sum'] .values / data['o_l_sum'].values
-            data['ar'].values[np.isnan(data['ar'].values)] = 0.0
-            data['ar'].values[np.isinf(data['ar'].values)] = 0.0
-            data['ar'] = data['ar'].values * 100
+            data.loc[:, 'ar'] = data['h_o_sum'].values / data['o_l_sum'].values
+            data.loc[:, 'ar'] = _na_fill(data['ar']) * 100
             data.loc[:, 'h_cy_sum'] = tl.SUM(data['h_cy'].values, timeperiod=26)
             data.loc[:, 'cy_l_sum'] = tl.SUM(data['cy_l'].values, timeperiod=26)
             data.loc[:, 'br'] = data['h_cy_sum'].values / data['cy_l_sum'].values
-            data['br'].values[np.isnan(data['br'].values)] = 0.0
-            data['br'].values[np.isinf(data['br'].values)] = 0.0
-            data['br'] = data['br'].values * 100
+            data.loc[:, 'br'] = _na_fill(data['br']) * 100
 
             # EMV
             data.loc[:, 'prev_high'] = data['high'].shift(1, fill_value=0.0).values
@@ -325,42 +311,36 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             data.loc[:, 'phl_avg'] = (data['prev_high'].values + data['prev_low'].values) / 2.0
             data.loc[:, 'emva_em'] = (data['hl_avg'].values - data['phl_avg'].values) * data['h_l'].values / data['amount'].values
             data.loc[:, 'emv'] = tl.SUM(data['emva_em'].values, timeperiod=14)
-            data['emv'].values[np.isnan(data['emv'].values)] = 0.0
+            data.loc[:, 'emv'] = _na_fill(data['emv'])
             data.loc[:, 'emva'] = tl.MA(data['emv'].values, timeperiod=9)
-            data['emva'].values[np.isnan(data['emva'].values)] = 0.0
+            data.loc[:, 'emva'] = _na_fill(data['emva'])
 
             # BIAS
             data.loc[:, 'ma6'] = tl.MA(data['close'].values, timeperiod=6)
-            data['ma6'].values[np.isnan(data['ma6'].values)] = 0.0
+            data.loc[:, 'ma6'] = _na_fill(data['ma6'])
             data.loc[:, 'ma12'] = tl.MA(data['close'].values, timeperiod=12)
-            data['ma12'].values[np.isnan(data['ma12'].values)] = 0.0
+            data.loc[:, 'ma12'] = _na_fill(data['ma12'])
             data.loc[:, 'ma24'] = tl.MA(data['close'].values, timeperiod=24)
-            data['ma24'].values[np.isnan(data['ma24'].values)] = 0.0
+            data.loc[:, 'ma24'] = _na_fill(data['ma24'])
             data.loc[:, 'bias'] = ((data['close'].values - data['ma6'].values) / data['ma6'].values)
-            data['bias'].values[np.isnan(data['bias'].values)] = 0.0
-            data['bias'].values[np.isinf(data['bias'].values)] = 0.0
-            data['bias'] = data['bias'].values * 100
+            data.loc[:, 'bias'] = _na_fill(data['bias']) * 100
             data.loc[:, 'bias_12'] = (data['close'].values - data['ma12'].values) / data['ma12'].values
-            data['bias_12'].values[np.isnan(data['bias_12'].values)] = 0.0
-            data['bias_12'].values[np.isinf(data['bias_12'].values)] = 0.0
-            data['bias_12'] = data['bias_12'].values * 100
+            data.loc[:, 'bias_12'] = _na_fill(data['bias_12']) * 100
             data.loc[:, 'bias_24'] = (data['close'].values - data['ma24'].values) / data['ma24'].values
-            data['bias_24'].values[np.isnan(data['bias_24'].values)] = 0.0
-            data['bias_24'].values[np.isinf(data['bias_24'].values)] = 0.0
-            data['bias_24'] = data['bias_24'].values * 100
+            data.loc[:, 'bias_24'] = _na_fill(data['bias_24']) * 100
 
             # DPO
             data.loc[:, 'c_m_11'] = tl.MA(data['close'].values, timeperiod=11)
             data.loc[:, 'dpo'] = data['close'].values - data['c_m_11'].shift(1, fill_value=0.0).values
-            data['dpo'].values[np.isnan(data['dpo'].values)] = 0.0
+            data.loc[:, 'dpo'] = _na_fill(data['dpo'])
             data.loc[:, 'madpo'] = tl.MA(data['dpo'].values, timeperiod=6)
-            data['madpo'].values[np.isnan(data['madpo'].values)] = 0.0
+            data.loc[:, 'madpo'] = _na_fill(data['madpo'])
 
             # VHF
             data.loc[:, 'hcp_lcp'] = tl.MAX(data['close'].values, timeperiod=28) - tl.MIN(data['close'].values, timeperiod=28)
-            data['hcp_lcp'].values[np.isnan(data['hcp_lcp'].values)] = 0.0
+            data.loc[:, 'hcp_lcp'] = _na_fill(data['hcp_lcp'])
             data.loc[:, 'vhf'] = np.divide(data['hcp_lcp'].values, tl.SUM(abs(data['close'].values - data['prev_close'].values), timeperiod=28))
-            data['vhf'].values[np.isnan(data['vhf'].values)] = 0.0
+            data.loc[:, 'vhf'] = _na_fill(data['vhf'])
 
             # RVI
             data.loc[:, 'rvi_x'] = ((data['close'].values - data['open'].values) +
@@ -372,8 +352,7 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
                                     2 * (data['high'].shift(2, fill_value=0.0).values - data['low'].shift(2, fill_value=0.0).values) +
                                     (data['high'].shift(3, fill_value=0.0).values - data['low'].shift(3, fill_value=0.0).values)) / 6
             data.loc[:, 'rvi'] = tl.MA(data['rvi_x'].values, timeperiod=10) / tl.MA(data['rvi_y'].values, timeperiod=10)
-            data['rvi'].values[np.isnan(data['rvi'].values)] = 0.0
-            data['rvi'].values[np.isinf(data['rvi'].values)] = 0.0
+            data.loc[:, 'rvi'] = _na_fill(data['rvi'])
             data.loc[:, 'rvis'] = (data['rvi'].values +
                                    2 * data['rvi'].shift(1, fill_value=0.0).values +
                                    2 * data['rvi'].shift(2, fill_value=0.0).values +
@@ -382,9 +361,9 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
             # FI
             data.loc[:, 'fi'] = np.insert(np.diff(data['close'].values), 0, 0.0) * data['volume'].values
             data.loc[:, 'force_2'] = tl.EMA(data['fi'].values, timeperiod=2)
-            data['force_2'].values[np.isnan(data['force_2'].values)] = 0.0
+            data.loc[:, 'force_2'] = _na_fill(data['force_2'])
             data.loc[:, 'force_13'] = tl.EMA(data['fi'].values, timeperiod=13)
-            data['force_13'].values[np.isnan(data['force_13'].values)] = 0.0
+            data.loc[:, 'force_13'] = _na_fill(data['force_13'])
 
             # ENE
             data.loc[:, 'ene_ue'] = (1 + 11 / 100) * data['ma10'].values
@@ -393,24 +372,21 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
 
             # VOL
             data.loc[:, 'vol_5'] = tl.MA(data['volume'].values, timeperiod=5)
-            data['vol_5'].values[np.isnan(data['vol_5'].values)] = 0.0
+            data.loc[:, 'vol_5'] = _na_fill(data['vol_5'])
             data.loc[:, 'vol_10'] = tl.MA(data['volume'].values, timeperiod=10)
-            data['vol_10'].values[np.isnan(data['vol_10'].values)] = 0.0
+            data.loc[:, 'vol_10'] = _na_fill(data['vol_10'])
 
             # MA
             data.loc[:, 'ma20'] = tl.MA(data['close'].values, timeperiod=20)
-            data['ma20'].values[np.isnan(data['ma20'].values)] = 0.0
+            data.loc[:, 'ma20'] = _na_fill(data['ma20'])
             data.loc[:, 'ma200'] = tl.MA(data['close'].values, timeperiod=200)
-            data['ma200'].values[np.isnan(data['ma200'].values)] = 0.0
+            data.loc[:, 'ma200'] = _na_fill(data['ma200'])
 
         if threshold is not None:
             data = data.tail(n=threshold).copy()
         return data
     except Exception as e:
-        if data is None or data['code'] is None:
-            logging.error(f"calculate_indicator.get_indicators处理异常：代码{e}")
-        else:
-            logging.error(f"calculate_indicator.get_indicators处理异常：{data['code']}代码{e}")
+        logging.error(f"calculate_indicator.get_indicators处理异常：{e}")
     return None
 
 

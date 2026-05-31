@@ -377,6 +377,24 @@ def fetch_stock_hist(data_base, date_start=None, is_cache=True):
     return None
 
 
+def _format_hist_date(value):
+    if pd.isna(value):
+        return ''
+    if hasattr(value, 'strftime'):
+        return value.strftime('%Y-%m-%d')
+    value = str(value)
+    if len(value) == 8 and value.isdigit():
+        return f'{value[:4]}-{value[4:6]}-{value[6:8]}'
+    return value
+
+
+def _normalize_stock_hist_data(stock):
+    stock.columns = tuple(tbs.CN_STOCK_HIST_DATA['columns'])
+    if not stock.empty:
+        stock.loc[:, 'date'] = stock['date'].apply(_format_hist_date)
+    return stock
+
+
 # 增加读取股票缓存方法。加快处理速度。多线程解决效率
 def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
     cache_dir = os.path.join(stock_hist_cache_path, date_start[0:6], date_start)
@@ -391,8 +409,7 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
     try:
         if os.path.isfile(cache_file):
             stock = pd.read_pickle(cache_file, compression="gzip")
-            stock.columns = tuple(tbs.CN_STOCK_HIST_DATA['columns'])
-            return stock
+            return _normalize_stock_hist_data(stock)
         else:
             if ts_provider is not None:
                 end_d = date_end if date_end else datetime.date.today().strftime('%Y%m%d')
@@ -406,7 +423,7 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
 
             if stock is None or len(stock.index) == 0:
                 return None
-            stock.columns = tuple(tbs.CN_STOCK_HIST_DATA['columns'])
+            stock = _normalize_stock_hist_data(stock)
             stock = stock.sort_index()  # 将数据按照日期排序下。
             try:
                 if is_cache:

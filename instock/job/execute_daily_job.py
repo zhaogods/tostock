@@ -8,6 +8,9 @@ import concurrent.futures
 import logging
 import os.path
 import sys
+import pandas as pd
+# pandas 3.0 Copy-on-Write 导致 .values 赋值报 read-only 错误
+pd.options.mode.copy_on_write = False
 
 # 在项目运行时，临时将项目路径添加到环境变量
 cpath_current = os.path.dirname(os.path.dirname(__file__))
@@ -44,6 +47,10 @@ def main():
     # 第2.2步创建综合股票数据表
     sddj.main()
     time.sleep(3)  # xuangu API 完成后等待
+    # # # # 第7步创建股票闭盘后才有的数据——必须先下载历史K线缓存，
+    # # # # 否则指标/形态/策略阶段读到空缓存生成空结果
+    acdj.main()
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         # # 第3.1步创建股票其它基础数据表
         executor.submit(hdtj.main)
@@ -56,10 +63,6 @@ def main():
 
     # # # # 第6步创建股票回测
     # bdj.main()
-
-    time.sleep(3)  # 资金流/龙虎榜等完成后等待
-    # # # # 第7步创建股票闭盘后才有的数据
-    acdj.main()
 
     logging.info("######## 完成任务, 使用时间: %s 秒 #######" % (time.time() - start))
 

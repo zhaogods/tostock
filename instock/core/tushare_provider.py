@@ -5,6 +5,26 @@ import datetime
 import json
 import logging
 import os
+import threading
+import time
+from pathlib import Path
+
+# 自动加载项目根目录的 .env 文件（无需 python-dotenv）
+def _load_dotenv():
+    env_path = Path(__file__).resolve().parent.parent.parent / '.env'
+    if not env_path.exists():
+        return
+    with open(env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, val = line.partition('=')
+            key, val = key.strip(), val.strip()
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+
+_load_dotenv()
 
 import numpy as np
 import pandas as pd
@@ -12,12 +32,14 @@ import tushare as ts
 
 
 class TushareProvider:
-    _RATE_LIMITS = {
-        'daily':       int(os.environ.get('TUSHARE_DAILY_RATE', '400')),
-        'daily_basic': int(os.environ.get('TUSHARE_DAILY_BASIC_RATE', '150')),
-        'moneyflow':   int(os.environ.get('TUSHARE_MONEYFLOW_RATE', '150')),
-        'stock_basic': int(os.environ.get('TUSHARE_STOCK_BASIC_RATE', '40')),
+    _API_RATE_ENV = {
+        'daily': 'TUSHARE_DAILY_RATE',
+        'daily_basic': 'TUSHARE_DAILY_BASIC_RATE',
+        'moneyflow': 'TUSHARE_MONEYFLOW_RATE',
+        'stock_basic': 'TUSHARE_STOCK_BASIC_RATE',
     }
+    _throttle_locks = {api_name: threading.Lock() for api_name in _API_RATE_ENV}
+    _last_call = {}
 
     STOCK_SPOT_COLUMNS = (
         'date', 'code', 'name', 'new_price', 'change_rate', 'ups_downs',
@@ -41,17 +63,40 @@ class TushareProvider:
             )
         ts.set_token(token)
         self.pro = ts.pro_api()
-        self._last_call = {}
+        self._rate_limits = self._read_rate_limits()
+
+    @classmethod
+    def _read_rate_limits(cls):
+        rate_limits = {}
+        missing = []
+        for api_name, env_name in cls._API_RATE_ENV.items():
+            value = os.environ.get(env_name)
+            if value is None or value == '':
+                missing.append(env_name)
+                continue
+            try:
+                rate = int(value)
+            except ValueError as exc:
+                raise RuntimeError(f"Tushare 频率配置 {env_name} 必须是整数") from exc
+            if rate <= 0:
+                raise RuntimeError(f"Tushare 频率配置 {env_name} 必须大于 0")
+            rate_limits[api_name] = rate
+        if missing:
+            raise RuntimeError(f"Tushare 频率配置缺失：{', '.join(missing)}")
+        return rate_limits
 
     def _throttle(self, api_name):
-        rate = self._RATE_LIMITS.get(api_name, 200)
-        now = __import__('time').time()
-        last = self._last_call.get(api_name, 0)
+        rate = self._rate_limits[api_name]
         interval = 60.0 / rate
-        wait = interval - (now - last)
-        if wait > 0:
-            __import__('time').sleep(wait)
-        self._last_call[api_name] = __import__('time').time()
+        lock = self._throttle_locks[api_name]
+        with lock:
+            now = time.monotonic()
+            last = self._last_call.get(api_name, 0)
+            wait = interval - (now - last)
+            if wait > 0:
+                time.sleep(wait)
+                now = time.monotonic()
+            self._last_call[api_name] = now
 
     @staticmethod
     def _read_token():
@@ -242,6 +287,7 @@ class TushareProvider:
     def fetch_stock_hist(self, code, start_date, end_date,
                          period='daily', adjust='qfq'):
         ts_code = self.to_ts_code(code)
+        self._throttle('daily')
         try:
             df = self.pro.daily(
                 ts_code=ts_code, start_date=start_date, end_date=end_date)
@@ -254,7 +300,7 @@ class TushareProvider:
         df['trade_date'] = pd.to_datetime(df['trade_date'])
 
         result = pd.DataFrame()
-        result['日期'] = df['trade_date'].dt.date
+        result['日期'] = df['trade_date'].dt.strftime('%Y-%m-%d')
         result['开盘'] = pd.to_numeric(df['open'], errors='coerce')
         result['收盘'] = pd.to_numeric(df['close'], errors='coerce')
         result['最高'] = pd.to_numeric(df['high'], errors='coerce')
@@ -292,7 +338,7 @@ class TushareProvider:
 
         count = 0
         total = len(codes)
-        rate_limit = int(_os.environ.get('TUSHARE_RATE_LIMIT', '180'))
+        rate_limit = int(_os.environ['TUSHARE_RATE_LIMIT'])
 
         for i, code in enumerate(codes):
             cache_file = _os.path.join(
