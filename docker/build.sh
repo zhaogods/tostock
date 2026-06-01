@@ -5,7 +5,7 @@ rsync -av --progress ../../tostock . --exclude .git --exclude .idea --exclude *.
 rm -rf cron
 cp -r ../../tostock/cron .
 
-DOCKER_NAME=zhaogods/tostock
+DOCKER_NAME=zsswwz/tostock
 TAG1=$(date "+%Y%m")
 TAG2=latest
 

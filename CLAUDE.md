@@ -33,6 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `python klinepattern_data_daily_job.py`
   - `python strategy_data_daily_job.py`
   - `python backtest_data_daily_job.py`
+- Backtest can be run manually via `backtest_data_daily_job.py`, but it is not part of the main `execute_daily_job.py` pipeline.
 
 ### Web and trading services
 
@@ -49,9 +50,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - README documents a `docker run` flow rather than a compose-first workflow:
   - `docker network create InStockService`
   - `docker run -d --name InStockDbService --network InStockService -v /data/mariadb/data:/var/lib/instockdb -e MYSQL_ROOT_PASSWORD=root library/mariadb:latest`
-  - `docker run -dit --name InStock --network=InStockService -p 9988:9988 -v /data/instockproxy.txt:/data/InStock/instock/config/proxy.txt -v /data/eastmoneycookie.txt:/data/InStock/instock/config/eastmoney_cookie.txt -v /data/tushare.json:/data/InStock/instock/config/tushare.json -e db_host=InStockDbService zsswwz/tostock:latest`
-- A compose file exists at `docker/docker-compose.yml` if you want to inspect the default two-container layout.
-- `docker/build.sh` is not a generic repo-root build script: it assembles a custom build context using `../../stock` before invoking `docker build`.
+  - `docker run -dit --name InStock --network=InStockService -p 9988:9988 -v /data/instockproxy.txt:/data/tostock/instock/config/proxy.txt -v /data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt -e db_host=InStockDbService -e TUSHARE_TOKEN=... zsswwz/tostock:latest`
+- `docker/build.sh` is not a generic repo-root build script: it assembles a custom build context from `../../tostock`, excludes local config/runtime artifacts, then builds and pushes monthly/latest `zsswwz/tostock` image tags.
+- `docker/docker-compose.yml` reads `../.env` relative to the `docker/` directory, so compose-based deployment expects the real `.env` at the repository root.
 
 ### Logs, linting, and tests
 
@@ -61,6 +62,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - trading: `instock/log/stock_trade.log`
 - No verified lint command is defined in this checkout.
 - No automated test suite or single-test command was found in this checkout.
+- Existing GitHub Actions workflows under `.github/workflows/` appear stale/generated: they reference a root-level `Dockerfile` that is not present and should not be treated as authoritative CI until fixed.
 
 ## Architecture overview
 
@@ -75,8 +77,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Data source layering in `stockfetch.py`: Tushare (stock spot, fund flow 今日) → AkShare (ETF spot, event data like LHB/bonus/blocktrade) → legacy Eastmoney crawlers (selection, sector fund flow, chip race, limit-up reason).
 - `instock/core/stockfetch.py` also owns the historical cache under `instock/cache/hist/`. Many higher-level features assume they can reuse cached historical data instead of refetching it.
 - `instock/lib/database.py` is the database boundary. It builds the MySQL/MariaDB connection settings from in-code defaults plus environment overrides (`db_host`, `db_user`, `db_password`, `db_database`, `db_port`) and is responsible for inserting DataFrames, then adding primary keys and indexes after table creation.
+- `instock/lib/database.py` and `instock/core/tushare_provider.py` both auto-load a root `.env` file without `python-dotenv`; that is the preferred local configuration path alongside explicit environment variables.
 - `instock/job/*.py` are standalone pipeline stages. `instock/lib/run_template.py` provides the shared “current date / list of dates / date range” CLI behavior and trade-day filtering used by these scripts.
-- `instock/job/execute_daily_job.py` is the orchestrator, but do not assume it runs every analytics stage described in the README. In the current code it actively runs database init, realtime basic data, stock selection, “other daily” data, and after-close data; indicator, pattern, strategy, and backtest stages are imported but commented out.
+- `instock/job/execute_daily_job.py` is the orchestrator, but do not assume it runs every analytics stage described in the README. In the current code it actively runs database init, realtime basic data, stock selection, “other daily” data, after-close data, indicators, K-line patterns, and strategies; only backtest stays commented out.
 - The web app is server-rendered Tornado, not a separate SPA. `instock/web/web_service.py` wires the routes, stores one shared DB connection on the application object, and serves:
   - generic table pages via `instock/web/dataTableHandler.py`
   - indicator/detail pages via `instock/web/dataIndicatorsHandler.py`
@@ -98,7 +101,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## External data and config
 
-- **Tushare** is the primary source for daily stock spot data (`cn_stock_spot`) and individual stock fund flow — today window (`cn_stock_fund_flow`). Token must be configured in `instock/config/tushare.json`. Requires 2000+ 积分. Docker deployment must mount this file as a volume.
+- **Tushare** is the primary source for daily stock spot data (`cn_stock_spot`) and individual stock fund flow — today window (`cn_stock_fund_flow`). Token must be configured in `.env`, an environment variable, or `instock/config/tushare.json`. Requires 2000+ 积分.
+- The Tushare adapter also requires `TUSHARE_DAILY_RATE`, `TUSHARE_DAILY_BASIC_RATE`, `TUSHARE_MONEYFLOW_RATE`, `TUSHARE_STOCK_BASIC_RATE`, and `TUSHARE_RATE_LIMIT`; the pipeline fails fast if any are missing or invalid.
 - **AkShare** provides ETF spot data (`fund_etf_spot_em`), event data (LHB, bonus, block trade), trade calendar, and historical data fallback. Installed via `requirements.txt`.
 - Eastmoney legacy endpoints (push2.eastmoney.com) are still used for stock selection, sector fund flow (industry/concept), chip race, and limit-up reason. These are subject to IP rate-limiting.
 - Frequent Eastmoney requests can be rate-limited. Cookie support exists via either:
@@ -106,3 +110,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - file `instock/config/eastmoney_cookie.txt`
 - Proxy settings are read from `instock/config/proxy.txt`.
 - Optional trading credentials/client settings live in `instock/config/trade_client.json`.
+- Database configuration is read through `instock.lib.config` from defaults, `instock/config/database.json`, root `.env`, and environment variables, in that override order.

@@ -1,16 +1,15 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 import os.path
 import sys
-from abc import ABC
 
-import tornado.escape
 import tornado.httpserver
 import tornado.ioloop
 import tornado.options
-from tornado import gen
+import tornado.web
 
 # 在项目运行时，临时将项目路径添加到环境变量
 cpath_current = os.path.dirname(os.path.dirname(__file__))
@@ -21,12 +20,7 @@ if not os.path.exists(log_path):
     os.makedirs(log_path)
 logging.basicConfig(format='%(asctime)s %(message)s', filename=os.path.join(log_path, 'stock_web.log'))
 logging.getLogger().setLevel(logging.ERROR)
-import instock.lib.torndb as torndb
-import instock.lib.database as mdb
-import instock.lib.version as version
-import instock.web.dataTableHandler as dataTableHandler
-import instock.web.dataIndicatorsHandler as dataIndicatorsHandler
-import instock.web.base as webBase
+from instock.lib import config
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
@@ -34,10 +28,17 @@ __date__ = '2023/3/10 '
 
 class Application(tornado.web.Application):
     def __init__(self):
+        import instock.lib.torndb as torndb
+        import instock.lib.database as mdb
+        import instock.web.dataTableHandler as dataTableHandler
+        import instock.web.dataIndicatorsHandler as dataIndicatorsHandler
+
+        web_cfg = config.get_web_config()
         handlers = [
             # 设置路由
             (r"/", HomeHandler),
             (r"/instock/", HomeHandler),
+            (r"/health", HealthHandler),
             # 使用datatable 展示报表数据模块。
             (r"/instock/api_data", dataTableHandler.GetStockDataHandler),
             (r"/instock/data", dataTableHandler.GetStockHtmlHandler),
@@ -51,9 +52,8 @@ class Application(tornado.web.Application):
             static_path=os.path.join(os.path.dirname(__file__), "static"),
             xsrf_cookies=False,  # True,
             # cookie加密，部署时应通过环境变量设置唯一值
-            cookie_secret=os.environ.get(
-                "Tornado_COOKIE_SECRET", "027bb1b670eddf0392cdda8709268a17b58b7"),
-            debug=True,
+            cookie_secret=web_cfg['cookie_secret'],
+            debug=web_cfg['debug'],
         )
         super(Application, self).__init__(handlers, **settings)
         # Have one global connection to the blog DB across all handlers
@@ -61,24 +61,32 @@ class Application(tornado.web.Application):
 
 
 # 首页handler。
-class HomeHandler(webBase.BaseHandler, ABC):
-    @gen.coroutine
+class HomeHandler(tornado.web.RequestHandler):
     def get(self):
+        import instock.lib.version as version
+        import instock.web.base as webBase
+
         self.render("index.html",
                     stockVersion=version.__version__,
                     leftMenu=webBase.GetLeftMenu(self.request.uri))
+
+
+class HealthHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.set_header('Content-Type', 'application/json;charset=UTF-8')
+        self.write(json.dumps({'status': 'ok'}, ensure_ascii=False))
 
 
 def main():
     # tornado.options.parse_command_line()
     tornado.options.options.logging = None
 
+    web_cfg = config.get_web_config()
     http_server = tornado.httpserver.HTTPServer(Application())
-    port = int(os.environ.get('WEB_PORT', '9988'))
-    http_server.listen(port)
+    http_server.listen(web_cfg['port'])
 
-    print(f"服务已启动，web地址 : http://localhost:{port}/")
-    logging.error(f"服务已启动，web地址 : http://localhost:{port}/")
+    print(f"服务已启动，web地址 : http://localhost:{web_cfg['port']}/")
+    logging.error(f"服务已启动，web地址 : http://localhost:{web_cfg['port']}/")
 
     tornado.ioloop.IOLoop.current().start()
 

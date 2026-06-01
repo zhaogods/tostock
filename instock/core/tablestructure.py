@@ -25,6 +25,49 @@ TABLE_CN_STOCK_ATTENTION = {'name': 'cn_stock_attention', 'cn': '我的关注',
                             'columns': {'datetime': {'type': DATETIME, 'cn': '日期', 'size': 0},
                                         'code': {'type': VARCHAR(6, _COLLATE), 'cn': '代码', 'size': 60}}}
 
+TABLE_JOB_RUN_LOG = {'name': 'job_run_log', 'cn': '任务运行日志',
+                     'columns': {'run_date': {'type': DATE, 'cn': '运行日期', 'size': 110},
+                                 'job_name': {'type': VARCHAR(100, _COLLATE), 'cn': '任务名称', 'size': 180},
+                                 'start_time': {'type': DATETIME, 'cn': '开始时间', 'size': 160},
+                                 'end_time': {'type': DATETIME, 'cn': '结束时间', 'size': 160},
+                                 'status': {'type': VARCHAR(20, _COLLATE), 'cn': '状态', 'size': 80},
+                                 'duration_seconds': {'type': FLOAT, 'cn': '耗时秒', 'size': 90},
+                                 'rows_written': {'type': BIGINT, 'cn': '写入行数', 'size': 100},
+                                 'message': {'type': VARCHAR(2000, _COLLATE), 'cn': '消息', 'size': 240},
+                                 'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
+
+TABLE_DATA_QUALITY_LOG = {'name': 'data_quality_log', 'cn': '数据质量日志',
+                          'columns': {'run_date': {'type': DATE, 'cn': '运行日期', 'size': 110},
+                                      'table_name': {'type': VARCHAR(100, _COLLATE), 'cn': '表名', 'size': 180},
+                                      'check_name': {'type': VARCHAR(100, _COLLATE), 'cn': '检查项', 'size': 160},
+                                      'level': {'type': VARCHAR(20, _COLLATE), 'cn': '级别', 'size': 80},
+                                      'passed': {'type': BIT, 'cn': '通过', 'size': 70},
+                                      'issue_count': {'type': BIGINT, 'cn': '问题数', 'size': 90},
+                                      'message': {'type': VARCHAR(2000, _COLLATE), 'cn': '消息', 'size': 240},
+                                      'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
+
+TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK = {'name': 'cn_stock_strategy_backtest_rank', 'cn': '策略回测排行',
+                                         'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 110},
+                                                     'strategy_name': {'type': VARCHAR(50, _COLLATE), 'cn': '策略名称', 'size': 120},
+                                                     'strategy_table': {'type': VARCHAR(100, _COLLATE), 'cn': '策略表', 'size': 180},
+                                                     'sample_count': {'type': BIGINT, 'cn': '样本数', 'size': 90},
+                                                     'avg_rate_5': {'type': FLOAT, 'cn': '5日平均收益率', 'size': 110},
+                                                     'avg_rate_10': {'type': FLOAT, 'cn': '10日平均收益率', 'size': 110},
+                                                     'avg_rate_20': {'type': FLOAT, 'cn': '20日平均收益率', 'size': 110},
+                                                     'win_rate_5': {'type': FLOAT, 'cn': '5日胜率', 'size': 90},
+                                                     'win_rate_10': {'type': FLOAT, 'cn': '10日胜率', 'size': 90},
+                                                     'win_rate_20': {'type': FLOAT, 'cn': '20日胜率', 'size': 90},
+                                                     'best_rate_20': {'type': FLOAT, 'cn': '20日最佳收益率', 'size': 120},
+                                                     'worst_rate_20': {'type': FLOAT, 'cn': '20日最差收益率', 'size': 120},
+                                                     'updated_at': {'type': DATETIME, 'cn': '更新时间', 'size': 160}}}
+
+TABLE_DAILY_MARKET_REPORT = {'name': 'daily_market_report', 'cn': '每日复盘报告',
+                             'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 110},
+                                         'title': {'type': VARCHAR(200, _COLLATE), 'cn': '标题', 'size': 200},
+                                         'summary': {'type': VARCHAR(2000, _COLLATE), 'cn': '摘要', 'size': 260},
+                                         'report_path': {'type': VARCHAR(500, _COLLATE), 'cn': '报告路径', 'size': 260},
+                                         'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
+
 TABLE_CN_ETF_SPOT = {'name': 'cn_etf_spot', 'cn': '每日ETF数据',
                      'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 0},
                                  'code': {'type': VARCHAR(6, _COLLATE), 'cn': '代码', 'size': 60},

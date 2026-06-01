@@ -1,75 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import json
 import logging
-import os
-from pathlib import Path
 import pymysql
 from sqlalchemy import create_engine
 from sqlalchemy.types import NVARCHAR
 from sqlalchemy import inspect
 
+from instock.lib import config
+
 __author__ = 'myh '
 __date__ = '2023/3/10 '
 
-# 自动加载项目根目录的 .env 文件（无需 python-dotenv）
-def _load_dotenv():
-    env_path = Path(__file__).resolve().parent.parent.parent / '.env'
-    if not env_path.exists():
-        return
-    with open(env_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#') or '=' not in line:
-                continue
-            key, _, val = line.partition('=')
-            key, val = key.strip(), val.strip()
-            if key and val and key not in os.environ:
-                os.environ[key] = val
-
-_load_dotenv()
-
-db_host = os.environ.get('db_host', 'localhost')
-db_user = os.environ.get('db_user', 'root')
-db_password = os.environ.get('db_password', '')
-db_database = os.environ.get('db_database', 'instockdb')
-db_port = int(os.environ.get('db_port', '3306'))
-db_charset = os.environ.get('db_charset', 'utf8mb4')
-
-if not db_password:
-    raise RuntimeError(
-        "数据库密码未配置。请在 .env 中设置 db_password，"
-        "或设置环境变量 db_password"
-    )
-
-_db_config_file = Path(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'database.json'))
-if _db_config_file.exists():
-    with open(_db_config_file, 'r', encoding='utf-8') as file:
-        _db_config = json.load(file)
-    db_host = _db_config.get('host', db_host)
-    db_user = _db_config.get('user', db_user)
-    db_password = _db_config.get('password', db_password)
-    db_database = _db_config.get('database', db_database)
-    db_port = int(_db_config.get('port', db_port))
-    db_charset = _db_config.get('charset', db_charset)
-
-# 使用环境变量获得数据库,docker -e 传递
-_db_host = os.environ.get('db_host')
-if _db_host is not None:
-    db_host = _db_host
-_db_user = os.environ.get('db_user')
-if _db_user is not None:
-    db_user = _db_user
-_db_password = os.environ.get('db_password')
-if _db_password is not None:
-    db_password = _db_password
-_db_database = os.environ.get('db_database')
-if _db_database is not None:
-    db_database = _db_database
-_db_port = os.environ.get('db_port')
-if _db_port is not None:
-    db_port = int(_db_port)
+_db_config = config.get_db_config()
+db_host = _db_config.get('host', 'localhost')
+db_user = _db_config.get('user', 'root')
+db_password = _db_config.get('password', '')
+db_database = _db_config.get('database', 'instockdb')
+db_port = int(_db_config.get('port', 3306))
+db_charset = _db_config.get('charset', 'utf8mb4')
 
 MYSQL_CONN_URL = "mysql+pymysql://%s:%s@%s:%s/%s?charset=%s" % (
     db_user, db_password, db_host, db_port, db_database, db_charset)
@@ -79,6 +28,8 @@ logging.info(f"数据库链接信息：{MYSQL_CONN_LOG_URL}")
 
 MYSQL_CONN_DBAPI = {'host': db_host, 'user': db_user, 'password': db_password, 'database': db_database,
                     'charset': db_charset, 'port': db_port, 'autocommit': True}
+MYSQL_CONN_DBAPI_LOG = MYSQL_CONN_DBAPI.copy()
+MYSQL_CONN_DBAPI_LOG['password'] = '***' if db_password else ''
 
 MYSQL_CONN_TORNDB = {'host': f'{db_host}:{str(db_port)}', 'user': db_user, 'password': db_password,
                      'database': db_database, 'charset': db_charset, 'max_idle_time': 3600, 'connect_timeout': 1000}
@@ -94,12 +45,35 @@ def engine_to_db(to_db):
     return _engine
 
 
+def _run_date_from_data(data):
+    try:
+        if 'date' in data.columns and len(data.index) > 0:
+            value = data.iloc[0]['date']
+            if hasattr(value, 'date'):
+                return value.date()
+            return value
+    except Exception:
+        pass
+    return None
+
+
+def _record_data_quality(table_name, data):
+    try:
+        if data is None or len(data.index) == 0:
+            return
+        from instock.core import data_quality
+        results = data_quality.validate_dataframe(table_name, data)
+        data_quality.record_quality_results(table_name, results, _run_date_from_data(data))
+    except Exception as exc:
+        logging.error(f"database._record_data_quality处理异常：{table_name}{exc}")
+
+
 # DB Api -数据库连接对象connection
 def get_connection():
     try:
         return pymysql.connect(**MYSQL_CONN_DBAPI)
     except Exception as e:
-        logging.error(f"database.conn_not_cursor处理异常：{MYSQL_CONN_DBAPI}{e}")
+        logging.error(f"database.conn_not_cursor处理异常：{MYSQL_CONN_DBAPI_LOG}{e}")
     return None
 
 
@@ -124,6 +98,8 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
     if write_index:
         # 插入到第一个位置：
         col_name_list.insert(0, data.index.name)
+    if to_db is None:
+        _record_data_quality(table_name, data)
     try:
         if cols_type is None:
             data.to_sql(name=table_name, con=engine_mysql, schema=to_db, if_exists='append',
@@ -154,53 +130,43 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
 # 更新数据
 def update_db_from_df(data, table_name, where):
     data = data.where(data.notnull(), None)
-    update_string = f'UPDATE `{table_name}` set '
-    where_string = ' where '
     cols = tuple(data.columns)
-    with get_connection() as conn:
+    where = tuple(where)
+    set_cols = tuple(col for col in cols if col not in where)
+    if not set_cols or not where:
+        return
+
+    set_sql = ', '.join(f'`{col}` = %s' for col in set_cols)
+    where_sql = ' and '.join(f'`{col}` = %s' for col in where)
+    sql = f'UPDATE `{table_name}` set {set_sql} where {where_sql}'
+
+    conn = get_connection()
+    if conn is None:
+        return
+    with conn:
         with conn.cursor() as db:
             try:
-                for row in data.values:
-                    sql = update_string
-                    sql_where = where_string
-                    for index, col in enumerate(cols):
-                        if col in where:
-                            if len(sql_where) == len(where_string):
-                                if type(row[index]) == str:
-                                    sql_where = f'''{sql_where}`{col}` = '{row[index]}' '''
-                                else:
-                                    sql_where = f'''{sql_where}`{col}` = {row[index]} '''
-                            else:
-                                if type(row[index]) == str:
-                                    sql_where = f'''{sql_where} and `{col}` = '{row[index]}' '''
-                                else:
-                                    sql_where = f'''{sql_where} and `{col}` = {row[index]} '''
-                        else:
-                            if type(row[index]) == str:
-                                if row[index] is None or row[index] != row[index]:
-                                    sql = f'''{sql}`{col}` = NULL, '''
-                                else:
-                                    sql = f'''{sql}`{col}` = '{row[index]}', '''
-                            else:
-                                if row[index] is None or row[index] != row[index]:
-                                    sql = f'''{sql}`{col}` = NULL, '''
-                                else:
-                                    sql = f'''{sql}`{col}` = {row[index]}, '''
-                    sql = f'{sql[:-2]}{sql_where}'
-                    db.execute(sql)
+                for row in data.itertuples(index=False, name=None):
+                    row_map = dict(zip(cols, row))
+                    params = [row_map[col] for col in set_cols]
+                    params.extend(row_map[col] for col in where)
+                    db.execute(sql, params)
             except Exception as e:
                 logging.error(f"database.update_db_from_df处理异常：{sql}{e}")
 
 
 # 检查表是否存在
 def checkTableIsExist(tableName):
-    with get_connection() as conn:
+    conn = get_connection()
+    if conn is None:
+        return False
+    with conn:
         with conn.cursor() as db:
             db.execute("""
                 SELECT COUNT(*)
                 FROM information_schema.tables
-                WHERE table_name = '{0}'
-                """.format(tableName.replace('\'', '\'\'')))
+                WHERE table_schema = DATABASE() AND table_name = %s
+                """, (tableName,))
             if db.fetchone()[0] == 1:
                 return True
     return False
@@ -208,7 +174,10 @@ def checkTableIsExist(tableName):
 
 # 增删改数据
 def executeSql(sql, params=()):
-    with get_connection() as conn:
+    conn = get_connection()
+    if conn is None:
+        return
+    with conn:
         with conn.cursor() as db:
             try:
                 db.execute(sql, params)
@@ -218,7 +187,10 @@ def executeSql(sql, params=()):
 
 # 查询数据
 def executeSqlFetch(sql, params=()):
-    with get_connection() as conn:
+    conn = get_connection()
+    if conn is None:
+        return None
+    with conn:
         with conn.cursor() as db:
             try:
                 db.execute(sql, params)
@@ -230,7 +202,10 @@ def executeSqlFetch(sql, params=()):
 
 # 计算数量
 def executeSqlCount(sql, params=()):
-    with get_connection() as conn:
+    conn = get_connection()
+    if conn is None:
+        return 0
+    with conn:
         with conn.cursor() as db:
             try:
                 db.execute(sql, params)

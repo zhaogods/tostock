@@ -53,9 +53,17 @@ class GetStockDataHandler(webBase.BaseHandler, ABC):
 
         if date is None:
             where = ""
+            params = ()
         else:
-            # where = f" WHERE `date` = '{date}'"
-            where = f" WHERE `date` = %s"
+            if 'date' in web_module_data.columns:
+                where = " WHERE `date` = %s"
+                params = (date,)
+            elif 'run_date' in web_module_data.columns:
+                where = " WHERE `run_date` = %s"
+                params = (date,)
+            else:
+                where = ""
+                params = ()
 
         order_by = ""
         if web_module_data.order_by is not None:
@@ -66,6 +74,6 @@ class GetStockDataHandler(webBase.BaseHandler, ABC):
             order_columns = f",{web_module_data.order_columns}"
 
         sql = f" SELECT *{order_columns} FROM `{web_module_data.table_name}`{where}{order_by}"
-        data = self.db.query(sql,date)
+        data = self.db.query(sql, *params)
 
         self.write(json.dumps(data, cls=MyEncoder))

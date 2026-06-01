@@ -2,33 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import datetime
-import json
 import logging
-import os
 import threading
 import time
-from pathlib import Path
-
-# 自动加载项目根目录的 .env 文件（无需 python-dotenv）
-def _load_dotenv():
-    env_path = Path(__file__).resolve().parent.parent.parent / '.env'
-    if not env_path.exists():
-        return
-    with open(env_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#') or '=' not in line:
-                continue
-            key, _, val = line.partition('=')
-            key, val = key.strip(), val.strip()
-            if key and val and key not in os.environ:
-                os.environ[key] = val
-
-_load_dotenv()
 
 import numpy as np
 import pandas as pd
 import tushare as ts
+
+from instock.lib import config
 
 
 class TushareProvider:
@@ -67,23 +49,7 @@ class TushareProvider:
 
     @classmethod
     def _read_rate_limits(cls):
-        rate_limits = {}
-        missing = []
-        for api_name, env_name in cls._API_RATE_ENV.items():
-            value = os.environ.get(env_name)
-            if value is None or value == '':
-                missing.append(env_name)
-                continue
-            try:
-                rate = int(value)
-            except ValueError as exc:
-                raise RuntimeError(f"Tushare 频率配置 {env_name} 必须是整数") from exc
-            if rate <= 0:
-                raise RuntimeError(f"Tushare 频率配置 {env_name} 必须大于 0")
-            rate_limits[api_name] = rate
-        if missing:
-            raise RuntimeError(f"Tushare 频率配置缺失：{', '.join(missing)}")
-        return rate_limits
+        return config.get_tushare_rate_limits()
 
     def _throttle(self, api_name):
         rate = self._rate_limits[api_name]
@@ -100,16 +66,7 @@ class TushareProvider:
 
     @staticmethod
     def _read_token():
-        token = os.environ.get('TUSHARE_TOKEN', '')
-        if token:
-            return token
-        config_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), 'config', 'tushare.json')
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f).get('token', '')
-        except Exception:
-            return ''
+        return config.get_tushare_token()
 
     # ---- 代码格式转换 ----
     @staticmethod

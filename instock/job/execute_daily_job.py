@@ -28,8 +28,11 @@ import basic_data_after_close_daily_job as acdj
 import indicators_data_daily_job as gdj
 import strategy_data_daily_job as sdj
 import backtest_data_daily_job as bdj
+import backtest_rank_daily_job as brdj
+import daily_report_job as drj
 import klinepattern_data_daily_job as kdj
 import selection_data_daily_job as sddj
+import instock.lib.job_monitor as jm
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
@@ -39,30 +42,34 @@ def main():
     start = time.time()
     _start = datetime.datetime.now()
     logging.info("######## 任务执行时间: %s #######" % _start.strftime("%Y-%m-%d %H:%M:%S.%f"))
+    run_date = _start.date()
     # 第1步创建数据库
-    bj.main()
+    jm.run_job('init_job', bj.main, run_date)
     # 第2.1步创建股票基础数据表
-    hdj.main()
+    jm.run_job('basic_data_daily_job', hdj.main, run_date)
     time.sleep(5)  # push2 实时行情完成后等待冷却
     # 第2.2步创建综合股票数据表
-    sddj.main()
+    jm.run_job('selection_data_daily_job', sddj.main, run_date)
     time.sleep(3)  # xuangu API 完成后等待
     # # # # 第7步创建股票闭盘后才有的数据——必须先下载历史K线缓存，
     # # # # 否则指标/形态/策略阶段读到空缓存生成空结果
-    acdj.main()
+    jm.run_job('basic_data_after_close_daily_job', acdj.main, run_date)
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        # # 第3.1步创建股票其它基础数据表
-        executor.submit(hdtj.main)
-        # # 第3.2步创建股票指标数据表
-        executor.submit(gdj.main)
-        # # # # 第4步创建股票k线形态表
-        executor.submit(kdj.main)
-        # # # # 第5步创建股票策略数据表
-        executor.submit(sdj.main)
+        futures = [
+            executor.submit(jm.run_job, 'basic_data_other_daily_job', hdtj.main, run_date),
+            executor.submit(jm.run_job, 'indicators_data_daily_job', gdj.main, run_date),
+            executor.submit(jm.run_job, 'klinepattern_data_daily_job', kdj.main, run_date),
+            executor.submit(jm.run_job, 'strategy_data_daily_job', sdj.main, run_date),
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
 
     # # # # 第6步创建股票回测
     # bdj.main()
+
+    jm.run_job('backtest_rank_daily_job', brdj.main, run_date)
+    jm.run_job('daily_report_job', drj.main, run_date)
 
     logging.info("######## 完成任务, 使用时间: %s 秒 #######" % (time.time() - start))
 
