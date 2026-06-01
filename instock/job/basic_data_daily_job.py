@@ -27,6 +27,13 @@ def save_nph_stock_spot_data(date, before=True):
         data = stock_data(date).get_data()
         if data is None or len(data.index) == 0:
             return
+        if 'new_price' not in data.columns:
+            logging.info(f"股票实时行情无价格字段，跳过入库：{date}")
+            return
+        data = data.loc[data['new_price'].notna()]
+        if len(data.index) == 0:
+            logging.info(f"股票实时行情无有效价格，跳过入库：{date}")
+            return
 
         table_name = tbs.TABLE_CN_STOCK_SPOT['name']
         # 删除老数据。
