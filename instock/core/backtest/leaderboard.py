@@ -50,7 +50,7 @@ def build_strategy_rank(date=None):
         try:
             if not mdb.checkTableIsExist(table_name):
                 continue
-            sql = f"SELECT {', '.join('`%s`' % f for f in RATE_FIELDS)} FROM `{table_name}` WHERE `date` = %s"
+            sql = f"SELECT {', '.join('`%s`' % f for f in RATE_FIELDS)} FROM `{table_name}` WHERE `date` <= %s AND `rate_20` IS NOT NULL"
             data = pd.read_sql(sql=sql, con=mdb.engine(), params=(date,))
         except Exception as exc:
             logging.error(f"leaderboard.build_strategy_rank处理异常：{table_name}{exc}")

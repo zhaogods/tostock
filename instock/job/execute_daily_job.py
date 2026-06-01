@@ -66,7 +66,7 @@ def main():
             future.result()
 
     # # # # 第6步创建股票回测
-    # bdj.main()
+    jm.run_job('backtest_data_daily_job', bdj.main, run_date)
 
     jm.run_job('backtest_rank_daily_job', brdj.main, run_date)
     jm.run_job('daily_report_job', drj.save_daily_market_report, run_date, run_date)
