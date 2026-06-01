@@ -31,10 +31,6 @@ class DailyReportHandler(webBase.BaseHandler, ABC):
                     "SELECT `date`,`title`,`summary`,`report_path`,`created_at` FROM `daily_market_report` WHERE `date` = %s",
                     today,
                 )
-                if report is None:
-                    report = self.db.get(
-                        "SELECT `date`,`title`,`summary`,`report_path`,`created_at` FROM `daily_market_report` ORDER BY `date` DESC LIMIT 1"
-                    )
         except Exception as e:
             logging.error(f"dailyReportHandler.DailyReportHandler查询异常：{e}")
 
