@@ -32,6 +32,7 @@ class Application(tornado.web.Application):
         import instock.lib.database as mdb
         import instock.web.dataTableHandler as dataTableHandler
         import instock.web.dataIndicatorsHandler as dataIndicatorsHandler
+        import instock.web.dailyReportHandler as dailyReportHandler
 
         web_cfg = config.get_web_config()
         handlers = [
@@ -42,6 +43,8 @@ class Application(tornado.web.Application):
             # 使用datatable 展示报表数据模块。
             (r"/instock/api_data", dataTableHandler.GetStockDataHandler),
             (r"/instock/data", dataTableHandler.GetStockHtmlHandler),
+            # 每日复盘正文。
+            (r"/instock/report/daily", dailyReportHandler.DailyReportHandler),
             # 获得股票指标数据。
             (r"/instock/data/indicators", dataIndicatorsHandler.GetDataIndicatorsHandler),
             # 加入关注

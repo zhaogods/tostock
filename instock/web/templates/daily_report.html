@@ -1,0 +1,29 @@
+{% extends "layout/default.html" %}
+
+{% block main_content %}
+<div class="page-content">
+    <h3 class="header smaller lighter">{{ title }}</h3>
+    <div class="clearfix">
+        <div class="pull-left tableTools-container">
+            <form class="form-inline" method="get" action="/instock/report/daily">
+                <label for="dateid">日期：</label>
+                <input type="text" value="{{ selected_date }}" id="dateid" name="date" class="input-group-sm form-control">
+                <button type="submit" class="btn btn-sm btn-primary">查看</button>
+            </form>
+        </div>
+    </div>
+    <div class="space-6"></div>
+    {% if summary %}
+    <div class="alert alert-info">
+        <strong>摘要：</strong>{{ summary }}
+    </div>
+    {% end %}
+    {% if created_at %}
+    <p class="text-muted">生成时间：{{ created_at }}</p>
+    {% end %}
+    {% if error_message %}
+    <div class="alert alert-warning">{{ error_message }}</div>
+    {% end %}
+    <pre style="white-space: pre-wrap; word-break: break-word; background: #fff; border: 1px solid #ddd; padding: 16px; line-height: 1.6;">{{ report_content }}</pre>
+</div>
+{% end %}

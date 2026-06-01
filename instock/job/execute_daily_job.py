@@ -69,7 +69,7 @@ def main():
     # bdj.main()
 
     jm.run_job('backtest_rank_daily_job', brdj.main, run_date)
-    jm.run_job('daily_report_job', drj.main, run_date)
+    jm.run_job('daily_report_job', drj.save_daily_market_report, run_date, run_date)
 
     logging.info("######## 完成任务, 使用时间: %s 秒 #######" % (time.time() - start))
 

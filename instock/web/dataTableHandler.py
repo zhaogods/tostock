@@ -35,7 +35,9 @@ class GetStockHtmlHandler(webBase.BaseHandler, ABC):
         name = self.get_argument("table_name", default=None, strip=False)
         web_module_data = sswmd.stock_web_module_data().get_data(name)
         run_date, run_date_nph = trd.get_trade_date_last()
-        if web_module_data.is_realtime:
+        if web_module_data.type == "运行监控":
+            date_now_str = datetime.date.today().strftime("%Y-%m-%d")
+        elif web_module_data.is_realtime:
             date_now_str = run_date_nph.strftime("%Y-%m-%d")
         else:
             date_now_str = run_date.strftime("%Y-%m-%d")
@@ -75,5 +77,12 @@ class GetStockDataHandler(webBase.BaseHandler, ABC):
 
         sql = f" SELECT *{order_columns} FROM `{web_module_data.table_name}`{where}{order_by}"
         data = self.db.query(sql, *params)
+        if web_module_data.type == "运行监控":
+            data = [dict(row) for row in data]
+            for row in data:
+                for field in ('start_time', 'end_time', 'created_at'):
+                    value = row.get(field)
+                    if isinstance(value, datetime.datetime):
+                        row[field] = value.strftime('%Y-%m-%d %H:%M:%S')
 
         self.write(json.dumps(data, cls=MyEncoder))

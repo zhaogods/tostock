@@ -200,64 +200,23 @@ class stock_web_module_data(metaclass=singleton_type):
             is_realtime=False,
             order_columns=f"(SELECT `datetime` FROM `{tbs.TABLE_CN_STOCK_ATTENTION['name']}` WHERE `code`=`{tbs.TABLE_CN_STOCK_KLINE_PATTERN['name']}`.`code`) AS `cdatetime`",
             order_by=" `cdatetime` DESC"
-        ), wmd.web_module_data(
-            mode="query",
-            type="股票策略数据",
-            ico="fa fa-check-square-o",
-            name=tbs.TABLE_CN_STOCK_SPOT_BUY['cn'],
-            table_name=tbs.TABLE_CN_STOCK_SPOT_BUY['name'],
-            columns=tuple(tbs.TABLE_CN_STOCK_SPOT_BUY['columns']),
-            column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_SPOT_BUY['columns']),
-            primary_key=[],
-            is_realtime=False,
-            order_columns=f"(SELECT `datetime` FROM `{tbs.TABLE_CN_STOCK_ATTENTION['name']}` WHERE `code`=`{tbs.TABLE_CN_STOCK_SPOT_BUY['name']}`.`code`) AS `cdatetime`",
-            order_by=" `cdatetime` DESC"
-        ), wmd.web_module_data(
-            mode="query",
-            type="策略分析",
-            ico="fa fa-line-chart",
-            name=tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['cn'],
-            table_name=tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['name'],
-            columns=tuple(tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['columns']),
-            column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['columns']),
-            primary_key=[],
-            is_realtime=False,
-            order_by=" `avg_rate_20` DESC"
-        ), wmd.web_module_data(
-            mode="query",
-            type="策略分析",
-            ico="fa fa-file-text-o",
-            name=tbs.TABLE_DAILY_MARKET_REPORT['cn'],
-            table_name=tbs.TABLE_DAILY_MARKET_REPORT['name'],
-            columns=tuple(tbs.TABLE_DAILY_MARKET_REPORT['columns']),
-            column_names=tbs.get_field_cns(tbs.TABLE_DAILY_MARKET_REPORT['columns']),
-            primary_key=[],
-            is_realtime=False,
-            order_by=" `date` DESC"
-        ), wmd.web_module_data(
-            mode="query",
-            type="运行监控",
-            ico="fa fa-tasks",
-            name=tbs.TABLE_JOB_RUN_LOG['cn'],
-            table_name=tbs.TABLE_JOB_RUN_LOG['name'],
-            columns=tuple(tbs.TABLE_JOB_RUN_LOG['columns']),
-            column_names=tbs.get_field_cns(tbs.TABLE_JOB_RUN_LOG['columns']),
-            primary_key=[],
-            is_realtime=False,
-            order_by=" `start_time` DESC"
-        ), wmd.web_module_data(
-            mode="query",
-            type="运行监控",
-            ico="fa fa-check-circle-o",
-            name=tbs.TABLE_DATA_QUALITY_LOG['cn'],
-            table_name=tbs.TABLE_DATA_QUALITY_LOG['name'],
-            columns=tuple(tbs.TABLE_DATA_QUALITY_LOG['columns']),
-            column_names=tbs.get_field_cns(tbs.TABLE_DATA_QUALITY_LOG['columns']),
-            primary_key=[],
-            is_realtime=False,
-            order_by=" `created_at` DESC"
         )]
 
+        self.data_list.append(
+            wmd.web_module_data(
+                mode="query",
+                type="股票策略数据",
+                ico="fa fa-check-square-o",
+                name=tbs.TABLE_CN_STOCK_SPOT_BUY['cn'],
+                table_name=tbs.TABLE_CN_STOCK_SPOT_BUY['name'],
+                columns=tuple(tbs.TABLE_CN_STOCK_SPOT_BUY['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_SPOT_BUY['columns']),
+                primary_key=[],
+                is_realtime=False,
+                order_columns=f"(SELECT `datetime` FROM `{tbs.TABLE_CN_STOCK_ATTENTION['name']}` WHERE `code`=`{tbs.TABLE_CN_STOCK_SPOT_BUY['name']}`.`code`) AS `cdatetime`",
+                order_by=" `cdatetime` DESC"
+            )
+        )
         for table in tbs.TABLE_CN_STOCK_STRATEGIES:
             self.data_list.append(
                 wmd.web_module_data(
@@ -274,6 +233,54 @@ class stock_web_module_data(metaclass=singleton_type):
                     order_by=" `cdatetime` DESC"
                 )
             )
+
+        self.data_list.extend([
+            wmd.web_module_data(
+                mode="query",
+                type="策略分析",
+                ico="fa fa-line-chart",
+                name=tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['cn'],
+                table_name=tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['name'],
+                columns=tuple(tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['columns']),
+                primary_key=[],
+                is_realtime=False,
+                order_by=" `avg_rate_20` DESC"
+            ), wmd.web_module_data(
+                mode="query",
+                type="每日复盘",
+                ico="fa fa-file-text-o",
+                name=tbs.TABLE_DAILY_MARKET_REPORT['cn'],
+                table_name=tbs.TABLE_DAILY_MARKET_REPORT['name'],
+                columns=tuple(tbs.TABLE_DAILY_MARKET_REPORT['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_DAILY_MARKET_REPORT['columns']),
+                primary_key=[],
+                is_realtime=False,
+                url="/instock/report/daily"
+            ), wmd.web_module_data(
+                mode="query",
+                type="运行监控",
+                ico="fa fa-tasks",
+                name=tbs.TABLE_JOB_RUN_LOG['cn'],
+                table_name=tbs.TABLE_JOB_RUN_LOG['name'],
+                columns=tuple(tbs.TABLE_JOB_RUN_LOG['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_JOB_RUN_LOG['columns']),
+                primary_key=[],
+                is_realtime=False,
+                order_by=" `start_time` DESC"
+            ), wmd.web_module_data(
+                mode="query",
+                type="运行监控",
+                ico="fa fa-check-circle-o",
+                name=tbs.TABLE_DATA_QUALITY_LOG['cn'],
+                table_name=tbs.TABLE_DATA_QUALITY_LOG['name'],
+                columns=tuple(tbs.TABLE_DATA_QUALITY_LOG['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_DATA_QUALITY_LOG['columns']),
+                primary_key=[],
+                is_realtime=False,
+                order_by=" `created_at` DESC"
+            )
+        ])
         for tmp in self.data_list:
             _data[tmp.table_name] = tmp
         self.data = _data

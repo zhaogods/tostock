@@ -32,6 +32,7 @@
 
 <script type="text/javascript">
     const nameParam = $.getUrlVar('table_name');
+    const tableType = "{{ web_module_data.type }}";
     let dateParam = "{{ date_now }}";
     const colInfos = {% raw web_module_data.column_names %};
     let myView;
@@ -56,6 +57,14 @@
             });
             hyperlinkStyle.cellType = hl;
             colInfos[1].style = hyperlinkStyle;
+        }
+        if (tableType === '运行监控') {
+            ["start_time", "end_time", "created_at"].forEach(function (field) {
+                const idx = colInfos.findIndex(function (col) { return col.value === field; });
+                if (idx >= 0) {
+                    colInfos[idx].dataType = "string";
+                }
+            });
         }
         let statusBar = initStatusBar(spread);
         initSpread(spread, statusBar);
@@ -161,9 +170,9 @@
                 record_date: { dataType: "date" },
                 ex_dividend_date: { dataType: "date" },
                 run_date: { dataType: "date" },
-                start_time: { dataType: "date" },
-                end_time: { dataType: "date" },
-                created_at: { dataType: "date" },
+                start_time: { dataType: tableType === '运行监控' ? "string" : "date" },
+                end_time: { dataType: tableType === '运行监控' ? "string" : "date" },
+                created_at: { dataType: tableType === '运行监控' ? "string" : "date" },
                 updated_at: { dataType: "date" },
               },
             }
