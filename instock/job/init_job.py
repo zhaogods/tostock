@@ -34,6 +34,9 @@ def _iter_project_tables():
     tables = [
         (tbs.TABLE_JOB_RUN_LOG, "`run_date`,`job_name`,`start_time`"),
         (tbs.TABLE_DATA_QUALITY_LOG, "`run_date`,`table_name`,`check_name`,`created_at`"),
+        (tbs.TABLE_SYSTEM_TASK_RUN, "`run_id`"),
+        (tbs.TABLE_SYSTEM_TASK_STATE, "`task_key`"),
+        (tbs.TABLE_SYSTEM_TASK_NOTICE, "`notice_id`"),
         (tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK, "`date`,`strategy_table`"),
         (tbs.TABLE_DAILY_MARKET_REPORT, "`date`"),
         (tbs.TABLE_CN_STOCK_ATTENTION, "`code`"),

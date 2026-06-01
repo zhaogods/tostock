@@ -46,6 +46,44 @@ TABLE_DATA_QUALITY_LOG = {'name': 'data_quality_log', 'cn': '数据质量日志'
                                       'message': {'type': VARCHAR(2000, _COLLATE), 'cn': '消息', 'size': 240},
                                       'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
 
+TABLE_SYSTEM_TASK_RUN = {'name': 'system_task_run', 'cn': '系统任务运行记录',
+                         'columns': {'run_id': {'type': VARCHAR(64, _COLLATE), 'cn': '运行ID', 'size': 180},
+                                     'task_key': {'type': VARCHAR(100, _COLLATE), 'cn': '任务Key', 'size': 160},
+                                     'task_name': {'type': VARCHAR(100, _COLLATE), 'cn': '任务名称', 'size': 180},
+                                     'category': {'type': VARCHAR(20, _COLLATE), 'cn': '任务类型', 'size': 90},
+                                     'trigger_type': {'type': VARCHAR(20, _COLLATE), 'cn': '触发方式', 'size': 90},
+                                     'schedule_key': {'type': VARCHAR(100, _COLLATE), 'cn': '计划Key', 'size': 160},
+                                     'run_date': {'type': DATE, 'cn': '运行日期', 'size': 110},
+                                     'args': {'type': VARCHAR(500, _COLLATE), 'cn': '参数', 'size': 220},
+                                     'status': {'type': VARCHAR(20, _COLLATE), 'cn': '状态', 'size': 80},
+                                     'pid': {'type': BIGINT, 'cn': '进程ID', 'size': 90},
+                                     'lock_group': {'type': VARCHAR(100, _COLLATE), 'cn': '互斥组', 'size': 140},
+                                     'start_time': {'type': DATETIME, 'cn': '开始时间', 'size': 160},
+                                     'end_time': {'type': DATETIME, 'cn': '结束时间', 'size': 160},
+                                     'duration_seconds': {'type': FLOAT, 'cn': '耗时秒', 'size': 90},
+                                     'log_path': {'type': VARCHAR(500, _COLLATE), 'cn': '日志路径', 'size': 260},
+                                     'message': {'type': VARCHAR(2000, _COLLATE), 'cn': '消息', 'size': 260},
+                                     'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
+
+TABLE_SYSTEM_TASK_STATE = {'name': 'system_task_state', 'cn': '系统任务调度状态',
+                           'columns': {'task_key': {'type': VARCHAR(100, _COLLATE), 'cn': '任务Key', 'size': 160},
+                                       'enabled': {'type': SmallInteger, 'cn': '启用', 'size': 70},
+                                       'last_fire_time': {'type': DATETIME, 'cn': '上次触发', 'size': 160},
+                                       'next_fire_time': {'type': DATETIME, 'cn': '下次触发', 'size': 160},
+                                       'last_run_id': {'type': VARCHAR(64, _COLLATE), 'cn': '最近运行ID', 'size': 180},
+                                       'updated_at': {'type': DATETIME, 'cn': '更新时间', 'size': 160}}}
+
+TABLE_SYSTEM_TASK_NOTICE = {'name': 'system_task_notice', 'cn': '系统任务通知',
+                            'columns': {'notice_id': {'type': VARCHAR(64, _COLLATE), 'cn': '通知ID', 'size': 180},
+                                        'level': {'type': VARCHAR(20, _COLLATE), 'cn': '级别', 'size': 80},
+                                        'task_key': {'type': VARCHAR(100, _COLLATE), 'cn': '任务Key', 'size': 160},
+                                        'title': {'type': VARCHAR(200, _COLLATE), 'cn': '标题', 'size': 220},
+                                        'message': {'type': VARCHAR(2000, _COLLATE), 'cn': '消息', 'size': 260},
+                                        'status': {'type': VARCHAR(20, _COLLATE), 'cn': '状态', 'size': 80},
+                                        'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160},
+                                        'ack_at': {'type': DATETIME, 'cn': '确认时间', 'size': 160},
+                                        'resolved_at': {'type': DATETIME, 'cn': '解决时间', 'size': 160}}}
+
 TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK = {'name': 'cn_stock_strategy_backtest_rank', 'cn': '策略回测排行',
                                          'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 110},
                                                      'strategy_name': {'type': VARCHAR(50, _COLLATE), 'cn': '策略名称', 'size': 120},

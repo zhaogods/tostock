@@ -33,6 +33,7 @@ class Application(tornado.web.Application):
         import instock.web.dataTableHandler as dataTableHandler
         import instock.web.dataIndicatorsHandler as dataIndicatorsHandler
         import instock.web.dailyReportHandler as dailyReportHandler
+        import instock.web.consoleHandler as consoleHandler
 
         web_cfg = config.get_web_config()
         handlers = [
@@ -45,6 +46,18 @@ class Application(tornado.web.Application):
             (r"/instock/data", dataTableHandler.GetStockHtmlHandler),
             # 每日复盘正文。
             (r"/instock/report/daily", dailyReportHandler.DailyReportHandler),
+            # 控制台。
+            (r"/instock/console", consoleHandler.ConsoleHandler),
+            (r"/instock/console/api/status", consoleHandler.ConsoleStatusApiHandler),
+            (r"/instock/console/api/overview", consoleHandler.ConsoleOverviewApiHandler),
+            (r"/instock/console/api/tasks", consoleHandler.ConsoleTasksApiHandler),
+            (r"/instock/console/api/runs", consoleHandler.ConsoleRunsApiHandler),
+            (r"/instock/console/api/notices", consoleHandler.ConsoleNoticesApiHandler),
+            (r"/instock/console/api/log", consoleHandler.ConsoleLogApiHandler),
+            (r"/instock/console/api/start", consoleHandler.ConsoleStartApiHandler),
+            (r"/instock/console/api/stop", consoleHandler.ConsoleStopApiHandler),
+            (r"/instock/console/api/enable", consoleHandler.ConsoleEnableApiHandler),
+            (r"/instock/console/api/notice/ack", consoleHandler.ConsoleNoticeAckApiHandler),
             # 获得股票指标数据。
             (r"/instock/data/indicators", dataIndicatorsHandler.GetDataIndicatorsHandler),
             # 加入关注

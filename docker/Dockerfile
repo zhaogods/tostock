@@ -8,6 +8,7 @@ ENV LANG=zh_CN.UTF-8
 ENV LC_CTYPE=zh_CN.UTF-8
 ENV LC_ALL=C
 ENV PYTHONPATH=/data/tostock
+ENV TASK_SCHEDULER_ENABLED=true
 EXPOSE 9988
 
 # 设置时区为上海，安装编译依赖
@@ -42,16 +43,17 @@ COPY cron/cron.hourly /etc/cron.hourly
 COPY cron/cron.workdayly /etc/cron.workdayly
 COPY cron/cron.monthly /etc/cron.monthly
 
-#add cron sesrvice.
-#任务调度
+#add cron service.
+# 任务调度默认由 supervisor 启动 run_scheduler；cron 保留但定时注释停用。
 RUN chmod 755 /data/tostock/instock/bin/run_*.sh && \
     chmod 755 /etc/cron.hourly/* && chmod 755 /etc/cron.workdayly/* && chmod 755 /etc/cron.monthly/* && \
     echo "SHELL=/bin/sh \n\
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin \n\
 # min hour day month weekday command \n\
-*/30 9,10,11,13,14,15 * * 1-5 /bin/run-parts /etc/cron.hourly \n\
-30 17 * * 1-5 /bin/run-parts /etc/cron.workdayly \n\
-30 10 * * 3,6 /bin/run-parts /etc/cron.monthly \n" > /var/spool/cron/crontabs/root && \
+# Cron scheduling is disabled; instock/lib/task_scheduler.py is the automatic scheduler. \n\
+# */30 9,10,11,13,14,15 * * 1-5 /bin/run-parts /etc/cron.hourly \n\
+# 30 17 * * 1-5 /bin/run-parts /etc/cron.workdayly \n\
+# 30 10 * * 3,6 /bin/run-parts /etc/cron.monthly \n" > /var/spool/cron/crontabs/root && \
     chmod 600 /var/spool/cron/crontabs/root
 
 ENTRYPOINT ["supervisord","-n","-c","/data/tostock/supervisor/supervisord.conf"]

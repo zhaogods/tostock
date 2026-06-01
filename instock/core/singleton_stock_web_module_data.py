@@ -259,26 +259,15 @@ class stock_web_module_data(metaclass=singleton_type):
                 url="/instock/report/daily"
             ), wmd.web_module_data(
                 mode="query",
-                type="运行监控",
-                ico="fa fa-tasks",
-                name=tbs.TABLE_JOB_RUN_LOG['cn'],
-                table_name=tbs.TABLE_JOB_RUN_LOG['name'],
-                columns=tuple(tbs.TABLE_JOB_RUN_LOG['columns']),
-                column_names=tbs.get_field_cns(tbs.TABLE_JOB_RUN_LOG['columns']),
+                type="控制台",
+                ico="fa fa-dashboard",
+                name="任务控制台",
+                table_name="console",
+                columns=(),
+                column_names=[],
                 primary_key=[],
-                is_realtime=False,
-                order_by=" `start_time` DESC"
-            ), wmd.web_module_data(
-                mode="query",
-                type="运行监控",
-                ico="fa fa-check-circle-o",
-                name=tbs.TABLE_DATA_QUALITY_LOG['cn'],
-                table_name=tbs.TABLE_DATA_QUALITY_LOG['name'],
-                columns=tuple(tbs.TABLE_DATA_QUALITY_LOG['columns']),
-                column_names=tbs.get_field_cns(tbs.TABLE_DATA_QUALITY_LOG['columns']),
-                primary_key=[],
-                is_realtime=False,
-                order_by=" `created_at` DESC"
+                is_realtime=True,
+                url="/instock/console"
             )
         ])
         for tmp in self.data_list:
