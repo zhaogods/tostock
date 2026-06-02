@@ -1,41 +1,8 @@
-version: '4.0.0'
-
-services:
-  instockdbservice:
-    image: library/mariadb:latest
-    container_name: InStockDbService
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-    volumes:
-      - ./data/mariadb:/var/lib/instockdb
-    networks:
-      - instock_network
-
-  instock:
-    image: zsswwz/tostock:latest
-    container_name: InStock
-    ports:
-      - "${WEB_PORT:-9988}:${WEB_PORT:-9988}"
-    env_file:
-      - ../.env
-    environment:
-      - db_host=InStockDbService
-      - Tornado_COOKIE_SECRET=${Tornado_COOKIE_SECRET:-$(openssl rand -hex 32)}
-      - TUSHARE_TOKEN=${TUSHARE_TOKEN}
-      - TUSHARE_DAILY_RATE=${TUSHARE_DAILY_RATE:-400}
-      - TUSHARE_DAILY_BASIC_RATE=${TUSHARE_DAILY_BASIC_RATE:-150}
-      - TUSHARE_MONEYFLOW_RATE=${TUSHARE_MONEYFLOW_RATE:-150}
-      - TUSHARE_STOCK_BASIC_RATE=${TUSHARE_STOCK_BASIC_RATE:-40}
-      - TUSHARE_RATE_LIMIT=${TUSHARE_RATE_LIMIT:-180}
-    volumes:
-      - ./data/instockproxy.txt:/data/tostock/instock/config/proxy.txt
-      - ./data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt
-    depends_on:
-      - instockdbservice
-    networks:
-      - instock_network
-
-networks:
-  instock_network:
-    driver: bridge
-
+# docker-compose.yml 已迁移到项目根目录。
+#
+# 请从仓库根目录运行：
+#   docker compose up -d
+#
+# 根目录 compose 会通过 instock_config_init 服务自动创建：
+#   ./docker/data/instockproxy.txt
+#   ./docker/data/eastmoneycookie.txt
