@@ -251,7 +251,7 @@ def _update_state(task_key, last_run_id='', last_fire_time=None, next_fire_time=
         _execute(f"UPDATE `system_task_state` SET {', '.join(assignments)} WHERE `task_key`=%s", tuple(params))
     else:
         _execute(
-            "INSERT INTO `system_task_state` (`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at`) VALUES (%s,%s,%s,%s,%s,%s)",
+            "INSERT IGNORE INTO `system_task_state` (`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at`) VALUES (%s,%s,%s,%s,%s,%s)",
             (task_key, 1 if enabled is not False else 0, last_fire_time, next_fire_time, last_run_id, updated_at),
         )
 
@@ -264,7 +264,7 @@ def ensure_task_states():
         if task.key in existing:
             continue
         _execute(
-            "INSERT INTO `system_task_state` (`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at`) VALUES (%s,%s,%s,%s,%s,%s)",
+            "INSERT IGNORE INTO `system_task_state` (`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at`) VALUES (%s,%s,%s,%s,%s,%s)",
             (task.key, 1 if task.enabled_by_default else 0, None, None, '', updated_at),
         )
 
@@ -473,6 +473,13 @@ def _notice_exists(task_key, title):
     return bool(rows)
 
 
+def _resolve_notices(task_key, title):
+    _execute(
+        "UPDATE `system_task_notice` SET `status`='resolved',`resolved_at`=%s WHERE `task_key`=%s AND `title`=%s AND `status`='open'",
+        (_now(), task_key, title),
+    )
+
+
 def create_notice(task_key, level, title, message):
     if _notice_exists(task_key, title):
         return None
@@ -496,6 +503,7 @@ def _check_daily_pipeline(task):
     if not rows or rows[0].get('status') != STATUS_SUCCESS:
         create_notice(task.key, 'warning', '今日收盘后全量任务未确认成功', '18:00 后仍未看到 daily_report_job 成功记录。')
         return '已生成日终任务提醒'
+    _resolve_notices(task.key, '今日收盘后全量任务未确认成功')
     return '日终任务已成功'
 
 
@@ -508,6 +516,7 @@ def _check_data_quality(task):
     if count:
         create_notice(task.key, 'warning', '今日存在数据质量异常', f'今日数据质量日志中有 {count} 条未通过检查。')
         return f'发现数据质量异常：{count} 条'
+    _resolve_notices(task.key, '今日存在数据质量异常')
     return '未发现数据质量异常'
 
 

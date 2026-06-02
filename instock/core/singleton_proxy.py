@@ -20,11 +20,13 @@ __date__ = '2025/1/6 '
 # 读取代理
 class proxys(metaclass=singleton_type):
     _REFRESH_INTERVAL = int(os.environ.get('PROXY_REFRESH_MINUTES', '30')) * 60
+    _REFRESH_COOLDOWN = int(os.environ.get('PROXY_REFRESH_COOLDOWN_MINUTES', '5')) * 60
 
     def __init__(self):
         self.data = []
         self._cursor = 0
         self._last_refresh = 0
+        self._last_refresh_attempt = 0
         self._load()
 
     def _load(self):
@@ -36,8 +38,11 @@ class proxys(metaclass=singleton_type):
         self._cursor = 0
 
     def _try_refresh(self):
+        if time.time() - self._last_refresh_attempt < self._REFRESH_COOLDOWN:
+            return
         if self.data and time.time() - self._last_refresh < self._REFRESH_INTERVAL:
             return
+        self._last_refresh_attempt = time.time()
         try:
             from instock.core.proxy_fetcher import refresh_proxy_pool
             refreshed = refresh_proxy_pool()

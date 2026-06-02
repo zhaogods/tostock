@@ -225,7 +225,8 @@ class TushareProvider:
 
         result = pd.DataFrame()
         result['code'] = mf['ts_code'].apply(self.from_ts_code)
-        result['name'] = ''
+        names = self._get_stock_names()
+        result['name'] = result['code'].map(names).fillna('')
         result['new_price'] = 0.0
         result['今日涨跌幅'] = 0.0
         result['今日主力净流入-净额'] = (net_mf * 10000).astype('int64')

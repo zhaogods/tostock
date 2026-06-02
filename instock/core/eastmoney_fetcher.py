@@ -21,6 +21,7 @@ _POOL_CONNECTIONS = int(os.environ.get('HTTP_POOL_CONNS', '50'))
 _POOL_MAXSIZE = int(os.environ.get('HTTP_POOL_MAXSIZE', '50'))
 _RETRY_SLEEP_MIN = float(os.environ.get('HTTP_RETRY_SLEEP_MIN', '1'))
 _RETRY_SLEEP_MAX = float(os.environ.get('HTTP_RETRY_SLEEP_MAX', '3'))
+_MIN_REQUEST_INTERVAL = float(os.environ.get('HTTP_MIN_INTERVAL', '1.0'))
 
 class eastmoney_fetcher:
     """
@@ -32,6 +33,15 @@ class eastmoney_fetcher:
         """初始化获取器"""
         self.base_dir = os.path.dirname(os.path.dirname(__file__))
         self.session = self._create_session()
+        self.has_cookie = self._get_cookie() is not None
+        self._last_request_time = 0
+
+    def _rate_limit(self):
+        """确保请求间隔不小于 _MIN_REQUEST_INTERVAL 秒"""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < _MIN_REQUEST_INTERVAL:
+            time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+        self._last_request_time = time.time()
 
     def _get_cookie(self):
         """
@@ -78,7 +88,7 @@ class eastmoney_fetcher:
             'Referer': 'https://quote.eastmoney.com/',
             'Accept': '*/*',
             'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br, zstd',
+            'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
         }
         session.headers.update(headers)
@@ -96,8 +106,12 @@ class eastmoney_fetcher:
         :param timeout: 超时时间
         :return: 响应对象
         """
+        self._rate_limit()
         for i in range(retry):
-            proxies = proxys().get_proxies()
+            if self.has_cookie:
+                proxies = {"http": None, "https": None}
+            else:
+                proxies = proxys().get_proxies()
             try:
                 response = self.session.get(
                     url,
@@ -106,10 +120,12 @@ class eastmoney_fetcher:
                     timeout=timeout
                 )
                 response.raise_for_status()
-                proxys().mark_ok()
+                if not self.has_cookie:
+                    proxys().mark_ok()
                 return response
             except requests.exceptions.RequestException as e:
-                proxys().mark_failed(proxies)
+                if not self.has_cookie:
+                    proxys().mark_failed(proxies)
                 print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
@@ -127,8 +143,12 @@ class eastmoney_fetcher:
         :param timeout: 超时时间
         :return: 响应对象
         """
+        self._rate_limit()
         for i in range(retry):
-            proxies = proxys().get_proxies()
+            if self.has_cookie:
+                proxies = {"http": None, "https": None}
+            else:
+                proxies = proxys().get_proxies()
             try:
                 response = self.session.post(
                     url,
@@ -139,10 +159,12 @@ class eastmoney_fetcher:
                     timeout=timeout
                 )
                 response.raise_for_status()
-                proxys().mark_ok()
+                if not self.has_cookie:
+                    proxys().mark_ok()
                 return response
             except requests.exceptions.RequestException as e:
-                proxys().mark_failed(proxies)
+                if not self.has_cookie:
+                    proxys().mark_failed(proxies)
                 print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))

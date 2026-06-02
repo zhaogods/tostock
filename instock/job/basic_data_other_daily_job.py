@@ -82,7 +82,9 @@ def save_nph_stock_fund_flow_data(date, before=True):
             else:
                 r = results.get(t)
                 if r is not None:
-                    r.drop(columns=['name', 'new_price'], inplace=True)
+                    if 'name' in r.columns:
+                        data['name'] = data['name'].replace('', pd.NA).fillna(r['name'])
+                    r.drop(columns=['name', 'new_price'], inplace=True, errors='ignore')
                     data = pd.merge(data, r, on=['code'], how='left')
 
         if data is None or len(data.index) == 0:

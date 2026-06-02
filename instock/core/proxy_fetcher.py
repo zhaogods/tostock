@@ -46,18 +46,22 @@ def refresh_proxy_pool():
     return valid
 
 
-def _validate_proxies(proxies, timeout=5):
+def _validate_proxies(proxies, timeout=4):
     valid = []
-    for proxy in proxies:
+    max_check = min(len(proxies), 5)
+    for i, proxy in enumerate(proxies[:max_check]):
         ok = _test_proxy(proxy, timeout)
         if ok:
             valid.append(proxy)
-        time.sleep(random.uniform(0.2, 0.5))
+            if len(valid) >= 2:
+                break
+        if i < max_check - 1 and len(valid) < 2:
+            time.sleep(random.uniform(0.1, 0.2))
     logging.info(f"proxy_fetcher: 验证通过 {len(valid)}/{len(proxies)}")
     return valid
 
 
-def _test_proxy(proxy, timeout=8):
+def _test_proxy(proxy, timeout=4):
     test_targets = [
         "https://datacenter-web.eastmoney.com/api/data/v1/get",
         "http://push2.eastmoney.com/api/qt/clist/get",
@@ -67,7 +71,7 @@ def _test_proxy(proxy, timeout=8):
             r = requests.get(
                 url,
                 proxies={"http": proxy, "https": proxy},
-                timeout=timeout,
+                timeout=(3, timeout),
                 headers={"User-Agent": "Mozilla/5.0"},
             )
             if r.status_code not in (200, 502):

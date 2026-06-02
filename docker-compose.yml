@@ -24,7 +24,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: InStock
     ports:
-      - "127.0.0.1:${WEB_PORT:-9988}:${WEB_PORT:-9988}"
+      - "${WEB_PORT:-9988}:${WEB_PORT:-9988}"
     env_file:
       - .env
     environment:
