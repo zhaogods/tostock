@@ -21,7 +21,7 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     pip install --default-timeout=300 supervisor && \
     pip install --default-timeout=300 mysqlclient
 
-COPY tostock/requirements.txt /tmp/requirements.txt
+COPY requirements.txt /tmp/requirements.txt
 RUN sed '/TA_Lib/d' /tmp/requirements.txt > /tmp/requirements_docker.txt && \
     pip install --default-timeout=300 -r /tmp/requirements_docker.txt && \
     mkdir ta-lib && \
@@ -38,7 +38,8 @@ RUN sed '/TA_Lib/d' /tmp/requirements.txt > /tmp/requirements_docker.txt && \
 
 WORKDIR /data
 #tostock软件
-COPY tostock /data/tostock
+COPY instock /data/tostock/instock
+COPY requirements.txt /data/tostock/requirements.txt
 COPY cron/cron.hourly /etc/cron.hourly
 COPY cron/cron.workdayly /etc/cron.workdayly
 COPY cron/cron.monthly /etc/cron.monthly
@@ -58,7 +59,7 @@ RUN chmod 755 /data/tostock/instock/bin/run_*.sh && \
         > /var/spool/cron/crontabs/root && \
     chmod 600 /var/spool/cron/crontabs/root
 
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod 755 /docker-entrypoint.sh
 
 ENTRYPOINT ["/bin/sh", "/docker-entrypoint.sh"]

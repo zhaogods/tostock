@@ -2,229 +2,178 @@
 
 {% block main_content %}
 <link rel="stylesheet" href="/static/css/bootstrap-datepicker3.min.css" />
-<link rel="stylesheet" href="/static/css/gc.spread.sheets.excel2013white.css" type="text/css"/>
-<script type="text/javascript" src="/static/js/gc.spread.sheets.all.min.js"></script>
-<script src="/static/js/FileSaver.js" type="text/javascript"></script>
-<script src="/static/js/gc.spread.sheets.tablesheet.min.js" type="text/javascript"></script>
-<script type="text/javascript" src="/static/js/gc.spread.sheets.resources.zh.min.js"></script>
-<script src="/static/js/gc.spread.excelio.min.js" type="text/javascript"></script>
+<script src="/static/js/ag-grid-community.min.js"></script>
+<script src="/static/js/sheetjs.xlsx.min.js"></script>
 <script src="/static/js/bootstrap-datepicker.min.js"></script>
 <script src="/static/js/bootstrap-datepicker.zh-CN.min.js"></script>
-<div style="height: 100%;overflow: hidden;">
-        <div class="table-header" style="width:100%;height:35px;">
-            <div style="display:inline-block;float:left;height:100%;">
-                <div style="display:inline-block;float:left;text-overflow:ellipsis;white-space:nowrap;">
-                    {{ web_module_data.name }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;日期：
-                </div>
-                <div style="display:inline-block;float:right;">
-                    <input type="hidden" id="dateid_old">
-                    <input type="text" value="{{ date_now }}" id="dateid" class="input-group-sm form-control date-picker">
-                </div>
-            </div>
-            <div style="display:inline-block;float:right;height:100%;">
-                <input type="button" id="resetFilter" value="重置筛选" style="background-color:#307ECC;height:100%;">
-                <input type="button" id="saveExcel" value="保存Excel" style="background-color:#307ECC;height:100%;">
-            </div>
+<style>
+#instock-data {
+    height: calc(100% - 91px);
+}
+.ag-cell-positive { color: #ff0000 !important; }
+.ag-cell-negative { color: #00aa00 !important; }
+.table-toolbar {
+    padding: 4px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    height: 35px;
+}
+.table-toolbar .date-picker {
+    display: inline-block;
+    width: 120px;
+}
+.status-bar {
+    padding: 2px 8px;
+    background: #f0f0f0;
+    border-top: 1px solid #ddd;
+    font-size: 12px;
+    height: 20px;
+    line-height: 16px;
+}
+</style>
+
+<div style="height:100%;overflow:hidden;display:flex;flex-direction:column;">
+    <div class="table-toolbar">
+        <div>
+            <span style="font-weight:bold;">{{ web_module_data.name }}</span>
+            <span style="margin-left:16px;">日期：</span>
+            <input type="text" value="{{ date_now }}" id="dateid"
+                   class="input-group-sm form-control date-picker">
         </div>
-        <div id="instock-data" style="width:100%;height:calc( 100% - 55px );"></div>
-        <div id="statusBar" style="width:100%;height:20px;"></div>
+        <div>
+            <button id="resetFilter" class="btn btn-sm btn-primary">重置筛选</button>
+            <button id="saveExcel" class="btn btn-sm btn-primary">保存 Excel</button>
+        </div>
+    </div>
+    <div id="instock-data" class="ag-theme-quartz"></div>
+    <div class="status-bar">
+        <i class="fa fa-commenting-o"></i>
+        总记录/筛选记录：<b id="totalRecords">0</b> / <b id="filteredRecords">0</b> 条
+        - 当前位置：第 <b id="currentRow">0</b> 行
+    </div>
 </div>
 
 <script type="text/javascript">
     const nameParam = $.getUrlVar('table_name');
-    const tableType = "{{ web_module_data.type }}";
     let dateParam = "{{ date_now }}";
     const colInfos = {% raw web_module_data.column_names %};
-    let myView;
+    let gridApi;
+
+    function buildColumnDefs() {
+        return colInfos.map(function (col) {
+            var def = {
+                field: col.value,
+                headerName: col.caption,
+                width: col.width || 100,
+                sortable: true,
+                filter: true,
+                resizable: true,
+            };
+
+            if (['date', 'code', 'name'].indexOf(col.value) >= 0) {
+                def.pinned = 'left';
+            }
+
+            if (col.value === 'code') {
+                def.cellRenderer = function (params) {
+                    if (!params.value) return '';
+                    var date = (params.data && params.data.date) || dateParam;
+                    var name = (params.data && params.data.name) || '';
+                    return '<a href="/instock/data/indicators?code=' + params.value
+                        + '&date=' + date + '&name=' + name
+                        + '" target="_blank" style="color:#1a0dab;">' + params.value + '</a>';
+                };
+            }
+
+            if (col.value === 'change_rate') {
+                def.cellClassRules = {
+                    'ag-cell-positive': function (params) { return params.value > 0; },
+                    'ag-cell-negative': function (params) { return params.value < 0; },
+                };
+            }
+
+            return def;
+        });
+    }
+
+    async function loadData(date) {
+        var resp = await fetch('/instock/api_data?name=' + nameParam + '&date=' + date);
+        var data = await resp.json();
+        gridApi.setGridOption('rowData', data);
+        updateStatusBar();
+    }
+
+    function updateStatusBar() {
+        if (!gridApi) return;
+        var displayed = gridApi.getDisplayedRowCount();
+        document.getElementById('totalRecords').textContent = displayed;
+        document.getElementById('filteredRecords').textContent = displayed;
+    }
+
+    function exportExcel() {
+        var rowData = [];
+        gridApi.forEachNodeAfterFilterAndSort(function (node) {
+            rowData.push(node.data);
+        });
+
+        var headers = colInfos.map(function (c) { return c.caption; });
+        var keys = colInfos.map(function (c) { return c.value; });
+        var exportData = rowData.map(function (row) {
+            var obj = {};
+            keys.forEach(function (k, i) { obj[headers[i]] = row[k] != null ? row[k] : ''; });
+            return obj;
+        });
+
+        var ws = XLSX.utils.json_to_sheet(exportData);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, nameParam);
+        XLSX.writeFile(wb, nameParam + dateParam + '.xlsx');
+    }
 
     $(document).ready(function () {
-        const spread = new GC.Spread.Sheets.Workbook(document.getElementById('instock-data'), {sheetCount: 0});
-        spread.options.newTabVisible = false;
-        spread.options.tabEditable = false;
-        spread.options.tabNavigationVisible = false;
-        spread.options.tabStripRatio = 0.37;
-        const sheet = spread.addSheetTab(0, nameParam, GC.Spread.Sheets.SheetType.tableSheet);
-        sheet.options.sheetTabColor = 'red';
-        sheet.options.allowAddNew = false; //hide new row
-        sheet.setDefaultRowHeight(80, GC.Spread.Sheets.SheetArea.colHeader);
-        sheet.applyTableTheme(GC.Spread.Sheets.Tables.TableThemes.light18)
-        if (colInfos[1].value == 'code') {
-            let hyperlinkStyle = new GC.Spread.Sheets.Style();
-            let hl = new GC.Spread.Sheets.CellTypes.HyperLink();
-            hl.onClickAction(function (cell) {
-                row = cell.row;
-                window.open('/instock/data/indicators?code=' + sheet.getSheet().getValue(row, 1) + '&date=' + (sheet.getSheet().getValue(row, 0)).format('yyyy-MM-dd') + '&name=' + sheet.getSheet().getValue(row, 2), '_blank');
-            });
-            hyperlinkStyle.cellType = hl;
-            colInfos[1].style = hyperlinkStyle;
-        }
-        if (tableType === '运行监控') {
-            ["start_time", "end_time", "created_at"].forEach(function (field) {
-                const idx = colInfos.findIndex(function (col) { return col.value === field; });
-                if (idx >= 0) {
-                    colInfos[idx].dataType = "string";
-                }
-            });
-        }
-        let statusBar = initStatusBar(spread);
-        initSpread(spread, statusBar);
-        initEvent(spread, statusBar);
-        const elem = document.querySelector('#instock-data')
-        {
-          let prevWidth;
-          new ResizeObserver(changes => {
-            for(const change of changes){
-              if(change.contentRect.width === prevWidth) {return;}
-              spread.refresh();
-            }
-          }).observe(elem);
-        };
-
-        $( ".date-picker" ).datepicker({
-            language: 'zh-CN', //设置语言
-            format:"yyyy-mm-dd",
-            showOtherMonths: true,
-            selectOtherMonths: false,
-            autoclose: true,
-            todayHighlight: true,
-            onSelect: function(selected,evnt) {
-                 console.log(selected);
-            }
-        }).on('changeDate', function(ev){
-           initSpread(GC.Spread.Sheets.findControl(document.getElementById('instock-data')));
-        });
-    });
-
-    function initStatusBar(spread) {
-        let old_cnd = 1;
-        let StatusItem = GC.Spread.Sheets.StatusBar.StatusItem;
-        function RecordCountItem(name, options) {
-            StatusItem.call(this, name, options);
-            this.cno = 1;
-            this.dataSourceLength = 0;
-            this.visibleLength =  0;
-        }
-        RecordCountItem.prototype = new StatusItem();
-        RecordCountItem.prototype.onCreateItemView = function(container) {
-            let element = this._element;
-            if (!element) {
-                element = this._element = document.createElement("span");
-                element.innerHTML = " <i class=\"fa fa-commenting-o\"></i>总记录/筛选记录：<b>" + this.dataSourceLength + "</b> / <b>" + this.visibleLength + "</b> 条 - 当前位置：第 <b>" + this.cno + "</b> 行";
-            }
-            container.appendChild(element);
-        };
-        RecordCountItem.prototype.onBind = function(context) {
-            let _this = this;
-            context.bind(GC.Spread.Sheets.Events.SelectionChanged, function(e, args) {
-                let row = args.newSelections[0].row;
-                if (row > 0 || args.newSelections[0].rowCount > 0) {
-                    _this.cno = row + 1;
-                }else{
-                    _this.cno = 0;
-                }
-                _this.onUpdate();
-            });
-            context.bind(GC.Spread.Sheets.Events.RangeFiltered, function (e, args) {
-                _this.dataSourceLength = myView.length();
-                _this.visibleLength = myView.visibleLength();
-                if (_this.visibleLength===0){old_cnd=_this.cno;_this.cno = 0;}
-                _this.onUpdate();
-            });
-            context.bind(GC.Spread.Sheets.Events.RangeFilterCleared, function (e, args) {
-                _this.dataSourceLength = myView.length();
-                _this.visibleLength = myView.visibleLength();
-                if (_this.visibleLength>0){_this.cno = old_cnd;}
-                _this.onUpdate();
-            });
-        };
-        RecordCountItem.prototype.onUpdate = function() {
-            StatusItem.prototype.onUpdate.call(this);
-            this._element.innerHTML = " <i class=\"fa fa-commenting-o\"></i>总记录/筛选记录：<b>" + this.dataSourceLength + "</b> / <b>" + this.visibleLength + "</b> 条 - 当前位置：第 <b>" + this.cno + "</b> 行";
-        };
-        let recordCountItem = new RecordCountItem('recordCountItem', { menuContent: '当前位置', value: 0 });
-        let statusBar = new GC.Spread.Sheets.StatusBar.StatusBar(document.getElementById('statusBar'), {
-            items: [recordCountItem]
-        });
-        statusBar.bind(spread);
-        return statusBar;
-    }
-
-    function initSpread(spread, statusBar) {
-        const dateParam_old = document.getElementById("dateid_old").value
-        dateParam = document.getElementById('dateid').value;
-        if (dateParam_old === dateParam) return;
-        document.getElementById("dateid_old").value = dateParam
-        spread.suspendPaint();
-        const dataManager = spread.dataManager();
-        const productTable = dataManager.addTable("productTable", {
-            remote: {
-                read: {
-                    url: "/instock/api_data?name="+nameParam+"&date="+dateParam
+        var gridOptions = {
+            columnDefs: buildColumnDefs(),
+            rowData: [],
+            defaultColDef: {
+                sortable: true,
+                filter: true,
+                resizable: true,
+                floatingFilter: true,
+            },
+            suppressDragLeaveHidesColumns: true,
+            onGridReady: function () {
+                loadData(dateParam);
+            },
+            onSelectionChanged: function () {
+                var selected = gridApi.getSelectedNodes();
+                if (selected.length > 0) {
+                    document.getElementById('currentRow').textContent = selected[0].rowIndex + 1;
                 }
             },
-            schema: {
-              columns: {
-                listing_date: { dataType: "date" },
-                report_date: { dataType: "date" },
-                plan_date: { dataType: "date" },
-                record_date: { dataType: "date" },
-                ex_dividend_date: { dataType: "date" },
-                run_date: { dataType: "date" },
-                start_time: { dataType: tableType === '运行监控' ? "string" : "date" },
-                end_time: { dataType: tableType === '运行监控' ? "string" : "date" },
-                created_at: { dataType: tableType === '运行监控' ? "string" : "date" },
-                updated_at: { dataType: "date" },
-              },
-            }
-        });
-        const sheet = spread.getActiveSheetTab();
-        myView = productTable.addView("myView",colInfos);
-        myView.fetch().then(function() {
-            sheet.setDataView(myView);
-            sheet.togglePinnedColumns([0,1,2]);
-            if (statusBar) {
-                let recordItem = statusBar.get("recordCountItem");
-                if (recordItem) {
-                    recordItem.dataSourceLength = myView.length();
-                    recordItem.visibleLength = myView.visibleLength();
-                    if (recordItem.visibleLength===0){recordItem.cno = 0;}
-                    recordItem.onUpdate();
-                }
-            }
-        });
-        spread.resumePaint();
-    }
-
-    function initEvent(spread,statusBar) {
-        document.getElementById('saveExcel').onclick = function() {
-            const excelIo = new GC.Spread.Excel.IO();
-            const json = spread.toJSON({ includeBindingSource: true, saveAsView: true });
-            excelIo.save(json, function(blob) {
-                saveAs(blob, nameParam+dateParam+".xlsx");
-            }, function(e) {
-                console.log(e);
-            });
+            onFilterChanged: updateStatusBar,
+            onSortChanged: updateStatusBar,
         };
-        document.getElementById("resetFilter").onclick = function() {
-            spread.getActiveSheetTab().getSheet().rowFilter().reset();
-            if (statusBar) {
-                let recordItem = statusBar.get("recordCountItem");
-                if (recordItem) {
-                    recordItem.visibleLength =recordItem.dataSourceLength
-                    recordItem.onUpdate();
-                }
-            }
-        };
-    }
 
-    Date.prototype.format = function (format) {
-      let o = {
-        "y": "" + this.getFullYear(),
-        "M": "" + (this.getMonth() + 1),  //month
-        "d": "" + this.getDate(),         //day
-        "h": "" + this.getHours(),        //hour
-      }
-      return Object.keys(o).reduce((pre, k)=> (new RegExp("(" + k + "+)").test(pre)) ? (pre.replace(RegExp.$1, RegExp.$1.length === 1 ? o[k] : o[k].padStart(2, "0"))) : pre , format);
-    }
+        var gridDiv = document.querySelector('#instock-data');
+        gridApi = agGrid.createGrid(gridDiv, gridOptions);
+
+        $('.date-picker').datepicker({
+            language: 'zh-CN',
+            format: 'yyyy-mm-dd',
+            autoclose: true,
+            todayHighlight: true,
+        }).on('changeDate', function () {
+            dateParam = $('#dateid').val();
+            loadData(dateParam);
+        });
+
+        document.getElementById('saveExcel').onclick = exportExcel;
+        document.getElementById('resetFilter').onclick = function () {
+            gridApi.setFilterModel(null);
+        };
+    });
 </script>
 {% end %}

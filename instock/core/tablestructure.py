@@ -1126,19 +1126,7 @@ def get_field_cn(key, table):
 def get_field_cns(cols):
     data = []
     for k in cols:
-        if k == 'code':
-            data.append({"value": k, "caption": cols[k]['cn'], "width": cols[k]['size'],
-                         "headerStyle": {"font": "bold 9pt Calibri", "wordWrap": "true"}, "style": ""})
-        elif k == 'change_rate':
-            data.append({"value": k, "caption": cols[k]['cn'], "width": cols[k]['size'],
-                         "headerStyle": {"font": "bold 9pt Calibri", "wordWrap": "true"}, "conditionalFormats": [
-                    {"ruleType": "formulaRule", "formula": "@>0", "style": {"foreColor": "red"}},
-                    {"ruleType": "formulaRule", "formula": "@<0", "style": {"foreColor": "green"}}]})
-        else:
-            data.append({"value": k, "caption": cols[k]['cn'], "width": cols[k]['size'],
-                         "headerStyle": {"font": "bold 9pt Calibri", "wordWrap": "true"}})
-        # data.append({"value": k, "caption": cols[k]['cn'], "width": cols[k]['size'], "headerStyle": {"font": "bold 9pt Calibri", "wordWrap": "true"}})
-        # data.append({"name": k, "displayName": cols[k]['cn'], "size": cols[k]['size']})
+        data.append({"value": k, "caption": cols[k]['cn'], "width": cols[k]['size']})
     return data
 
 

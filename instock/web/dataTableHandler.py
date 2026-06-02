@@ -21,9 +21,7 @@ class MyEncoder(json.JSONEncoder):
         if isinstance(obj, bytes):
             return "是" if ord(obj) == 1 else "否"
         elif isinstance(obj, datetime.date):
-            delta = datetime.datetime.combine(obj, datetime.time.min) - datetime.datetime(1899, 12, 30)
-            return f'/OADate({float(delta.days) + (float(delta.seconds) / 86400)})/'  # 86,400 seconds in day
-            # return obj.isoformat()
+            return obj.isoformat()
         else:
             return json.JSONEncoder.default(self, obj)
 
