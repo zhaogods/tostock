@@ -245,6 +245,27 @@
     .chip-default { color: #566273; background: #eef2f6; }
     .chip-disabled { color: #777; background: #f1f1f1; }
 
+    .stage-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-right: 6px;
+    }
+    .stage-fetch    { color: #0d5ca9; background: #e9f3ff; }
+    .stage-compute  { color: #6b1fa8; background: #f3e9ff; }
+    .stage-backtest { color: #9a6411; background: #fff6e8; }
+    .stage-report   { color: #087345; background: #e9f8f0; }
+    .stage-system   { color: #566273; background: #eef2f6; }
+    .stage-monitor  { color: #b42a2a; background: #fff0ef; }
+
+    .feeds-pages {
+        color: var(--console-muted);
+        font-size: 11px;
+        margin-top: 3px;
+    }
+    .feeds-pages:before { content: "→ "; }
 
     .date-panel {
         border: 1px dashed rgba(27, 111, 216, 0.28);
@@ -388,7 +409,7 @@
         <div class="row">
             <div class="col-xs-12 col-md-7">
                 <h2>系统任务中心</h2>
-                <p>统一查看自动调度、手动任务、运行日志和通知状态。</p>
+                <p>按数据管线阶段查看任务：拉取 → 计算 → 回测 → 报告。</p>
             </div>
             <div class="col-xs-12 col-md-5 console-toolbar">
                 <div class="scheduler-pill" id="schedulerPill"><span class="scheduler-dot"></span><span id="schedulerText">调度状态读取中</span></div>
@@ -408,53 +429,38 @@
         <div class="metric-card slate"><span class="metric-label">待处理通知</span><span class="metric-number" id="noticeCount">0</span></div>
     </div>
 
-    <div class="console-section">
-        <div class="console-section-header">
-            <h4 class="console-section-title">固定计划 <span class="console-section-subtitle">由新 scheduler 自动触发，可在此启停</span></h4>
+    <div class="date-panel">
+        <div class="row">
+            <div class="col-xs-12 col-sm-4">
+                <label>单日/日期列表</label>
+                <input class="form-control" id="dateArg" placeholder="YYYY-MM-DD 或逗号分隔日期列表">
+            </div>
+            <div class="col-xs-12 col-sm-3">
+                <label>开始日期</label>
+                <input class="form-control" id="startDate" placeholder="YYYY-MM-DD">
+            </div>
+            <div class="col-xs-12 col-sm-3">
+                <label>结束日期</label>
+                <input class="form-control" id="endDate" placeholder="YYYY-MM-DD">
+            </div>
+            <div class="col-xs-12 col-sm-2">
+                <label>&nbsp;</label>
+                <button class="btn btn-sm btn-info btn-block" id="manualRefreshButton">刷新状态</button>
+            </div>
         </div>
-        <div class="console-section-body"><div class="table-wrap"><table class="table table-hover task-table"><thead><tr><th>任务</th><th>状态</th><th>计划/下次</th><th>最近执行</th><th>耗时</th><th>操作</th></tr></thead><tbody id="fixedTasks"></tbody></table></div></div>
+        <div class="date-help">填写日期参数后再点击对应任务的「启动」按钮，可将参数传递给该任务。支持日期范围或逗号分隔列表。不填则按任务默认日期执行。</div>
     </div>
 
-    <div class="console-section">
-        <div class="console-section-header">
-            <h4 class="console-section-title">手动任务 <span class="console-section-subtitle">适合补数据、重算报告和排查问题</span></h4>
-        </div>
-        <div class="console-section-body">
-            <div class="date-panel">
-                <div class="row">
-                    <div class="col-xs-12 col-sm-4">
-                        <label>单日/日期列表</label>
-                        <input class="form-control" id="dateArg" placeholder="YYYY-MM-DD 或逗号分隔日期列表">
-                    </div>
-                    <div class="col-xs-12 col-sm-3">
-                        <label>开始日期</label>
-                        <input class="form-control" id="startDate" placeholder="YYYY-MM-DD">
-                    </div>
-                    <div class="col-xs-12 col-sm-3">
-                        <label>结束日期</label>
-                        <input class="form-control" id="endDate" placeholder="YYYY-MM-DD">
-                    </div>
-                    <div class="col-xs-12 col-sm-2">
-                        <label>&nbsp;</label>
-                        <button class="btn btn-sm btn-info btn-block" id="manualRefreshButton">刷新状态</button>
-                    </div>
-                </div>
-                <div class="date-help">填了“单日/日期列表”时会忽略开始/结束日期；不填日期则按任务默认逻辑执行。</div>
-            </div>
-            <div class="table-wrap"><table class="table table-hover task-table"><thead><tr><th>任务</th><th>状态</th><th>计划/下次</th><th>最近执行</th><th>耗时</th><th>操作</th></tr></thead><tbody id="manualTasks"></tbody></table></div>
-        </div>
-    </div>
+    <div id="pipelineStages"></div>
 
     <div class="row">
         <div class="col-xs-12 col-lg-5">
             <div class="console-section">
                 <div class="console-section-header">
-                    <h4 class="console-section-title">通知与监控</h4>
+                    <h4 class="console-section-title">通知中心</h4>
                     <button class="btn btn-xs btn-white" id="toggleHistoryButton">显示历史通知</button>
                 </div>
                 <div class="console-section-body">
-                    <div class="table-wrap"><table class="table table-hover task-table"><thead><tr><th>任务</th><th>状态</th><th>计划/下次</th><th>最近执行</th><th>耗时</th><th>操作</th></tr></thead><tbody id="notifyTasks"></tbody></table></div>
-                    <div class="space-10"></div>
                     <div id="noticeRows"></div>
                     <div id="noticeHistory" style="display:none;"></div>
                 </div>
@@ -472,7 +478,7 @@
         <div class="console-section-header"><h4 class="console-section-title">系统任务运行记录</h4></div>
         <div class="table-wrap">
             <table class="table table-striped table-hover console-table">
-                <thead><tr><th>任务</th><th>类型</th><th>触发</th><th>状态</th><th>开始时间</th><th>结束时间</th><th>耗时</th><th>消息</th><th>操作</th></tr></thead>
+                <thead><tr><th>任务</th><th>阶段</th><th>触发</th><th>状态</th><th>开始时间</th><th>结束时间</th><th>耗时</th><th>消息</th><th>操作</th></tr></thead>
                 <tbody id="recentRows"></tbody>
             </table>
         </div>
@@ -508,6 +514,15 @@
 <script type="text/javascript">
     let noticeHistoryVisible = false;
 
+    var PIPELINE_STAGES = [
+        {key: 'fetch',    label: '数据拉取',   desc: '从东方财富、Tushare 等外部 API 拉取原始行情与基本面数据。'},
+        {key: 'compute',  label: '数据计算',   desc: '基于历史 K 线和 TA-Lib 计算技术指标、K 线形态、策略筛选。'},
+        {key: 'backtest', label: '回测验证',   desc: '对策略选股结果填充未来 N 日收益率，汇总回测排行。'},
+        {key: 'report',   label: '报告产出',   desc: '根据当日全量数据生成 Markdown 每日复盘报告。'},
+        {key: 'system',   label: '系统维护',   desc: '数据库建表、缓存清理、代理池维护等基础设施操作。'},
+        {key: 'monitor',  label: '监控通知',   desc: '检查日终管线是否完成、数据质量是否异常，生成通知。'}
+    ];
+
     function escapeHtml(value) {
         return String(value == null ? '' : value)
             .replace(/&/g, '&amp;')
@@ -531,9 +546,9 @@
 
     function formatDuration(value) {
         if (value == null || value === '') return '';
-        const seconds = Math.max(0, Math.floor(Number(value) || 0));
+        var seconds = Math.max(0, Math.floor(Number(value) || 0));
         if (seconds < 60) return seconds + ' 秒';
-        const minutes = Math.floor(seconds / 60);
+        var minutes = Math.floor(seconds / 60);
         if (minutes < 60) return minutes + ' 分 ' + (seconds % 60) + ' 秒';
         return Math.floor(minutes / 60) + ' 小时 ' + (minutes % 60) + ' 分';
     }
@@ -544,21 +559,23 @@
     }
 
     function statusText(status) {
-        const map = {success: '成功', failed: '失败', running: '运行中', stopped: '已停止', skipped: '已跳过'};
+        var map = {success: '成功', failed: '失败', running: '运行中', stopped: '已停止', skipped: '已跳过'};
         return map[status] || status || '未知';
     }
 
     function statusChip(status, timedOut) {
         if (timedOut) return '<span class="status-chip chip-failed">疑似超时</span>';
-        const cls = status === 'success' ? 'chip-success' : status === 'running' ? 'chip-running' : status === 'failed' ? 'chip-failed' : status === 'stopped' ? 'chip-stopped' : 'chip-default';
+        var cls = status === 'success' ? 'chip-success' : status === 'running' ? 'chip-running' : status === 'failed' ? 'chip-failed' : status === 'stopped' ? 'chip-stopped' : 'chip-default';
         return '<span class="status-chip ' + cls + '">' + escapeHtml(statusText(status)) + '</span>';
     }
 
-    function categoryLabel(category) {
-        if (category === 'fixed') return '固定计划';
-        if (category === 'manual') return '手动任务';
-        if (category === 'notify') return '通知监控';
-        return category || '';
+    function stageLabel(category) {
+        var map = {fetch: '数据拉取', compute: '数据计算', backtest: '回测验证', report: '报告产出', system: '系统维护', monitor: '监控通知'};
+        return map[category] || category || '';
+    }
+
+    function stageBadge(category) {
+        return '<span class="stage-badge stage-' + escapeHtml(category) + '">' + escapeHtml(stageLabel(category)) + '</span>';
     }
 
     function triggerLabel(trigger) {
@@ -574,8 +591,8 @@
     function postAction(url, data, options) {
         options = options || {};
         if (options.confirmText && !confirm(options.confirmText)) return;
-        const button = options.button;
-        const oldText = button ? button.text() : '';
+        var button = options.button;
+        var oldText = button ? button.text() : '';
         if (button) button.prop('disabled', true).text(options.loadingText || '提交中...');
         $.ajax({
             type: 'POST',
@@ -597,7 +614,7 @@
     }
 
     function startTask(taskKey, allowDateArgs, button) {
-        const data = {task: taskKey};
+        var data = {task: taskKey};
         if (allowDateArgs) {
             data.date = $('#dateArg').val();
             data.start_date = $('#startDate').val();
@@ -627,21 +644,23 @@
     }
 
     function renderTaskRow(task) {
-        const rowClass = task.timed_out ? ' timeout' : (task.running ? ' running' : '');
-        const enabledBadge = task.enabled ? '<span class="status-chip chip-success">启用</span>' : '<span class="status-chip chip-disabled">停用</span>';
-        const stateBadge = task.running ? statusChip('running', task.timed_out) : '<span class="status-chip chip-default">空闲</span>';
-        const warning = task.warning ? '<div class="task-warning">' + escapeHtml(task.warning) + '</div>' : '';
-        const lastStatus = task.last_status ? statusChip(task.last_status, false) : '<span class="status-chip chip-default">暂无</span>';
-        const runtime = task.running ? formatDuration(task.running_seconds) : formatDuration(task.last_duration_seconds);
-        const startDisabled = task.running || !task.allow_manual_start ? 'disabled' : '';
-        const stopDisabled = (!task.running || !task.allow_stop) ? 'disabled' : '';
-        const enableButton = task.category === 'fixed' || task.category === 'notify'
+        var rowClass = task.timed_out ? ' timeout' : (task.running ? ' running' : '');
+        var enabledBadge = task.enabled ? '<span class="status-chip chip-success">启用</span>' : '<span class="status-chip chip-disabled">停用</span>';
+        var stateBadge = task.running ? statusChip('running', task.timed_out) : '<span class="status-chip chip-default">空闲</span>';
+        var warning = task.warning ? '<div class="task-warning">' + escapeHtml(task.warning) + '</div>' : '';
+        var lastStatus = task.last_status ? statusChip(task.last_status, false) : '<span class="status-chip chip-default">暂无</span>';
+        var runtime = task.running ? formatDuration(task.running_seconds) : formatDuration(task.last_duration_seconds);
+        var startDisabled = task.running || !task.allow_manual_start ? 'disabled' : '';
+        var stopDisabled = (!task.running || !task.allow_stop) ? 'disabled' : '';
+        var hasSchedule = !!(task.schedule_text);
+        var enableButton = hasSchedule
             ? '<button class="btn btn-xs btn-white js-enable" data-task="' + escapeHtml(task.key) + '" data-enabled="' + (task.enabled ? '0' : '1') + '">' + (task.enabled ? '停用' : '启用') + '</button>'
             : '';
-        const logRunId = task.running_run_id || task.last_run_id || '';
-        const logButton = logRunId ? '<button class="btn btn-xs btn-info js-log" data-run="' + escapeHtml(logRunId) + '">日志</button>' : '';
+        var logRunId = task.running_run_id || task.last_run_id || '';
+        var logButton = logRunId ? '<button class="btn btn-xs btn-info js-log" data-run="' + escapeHtml(logRunId) + '">日志</button>' : '';
+        var feeds = task.feeds_pages ? '<div class="feeds-pages">' + escapeHtml(task.feeds_pages) + '</div>' : '';
         return '<tr class="task-row' + rowClass + '">' +
-            '<td><div class="task-name">' + escapeHtml(task.name) + '</div><div class="task-desc-inline">' + escapeHtml(task.description) + '</div>' + warning + '</td>' +
+            '<td><div class="task-name">' + escapeHtml(task.name) + '</div><div class="task-desc-inline">' + escapeHtml(task.description) + '</div>' + feeds + warning + '</td>' +
             '<td>' + enabledBadge + ' ' + stateBadge + '</td>' +
             '<td><div>' + escapeHtml(task.schedule_text || '手动触发') + '</div><div class="task-subtext">下次：' + escapeHtml(task.next_fire_time || '未计算') + '</div></td>' +
             '<td>' + lastStatus + '<div class="task-subtext">' + escapeHtml(task.last_start_time || task.last_fire_time || '') + '</div></td>' +
@@ -653,26 +672,44 @@
             '</div></td></tr>';
     }
 
-    function renderTasks(groups) {
-        $('#fixedTasks').html((groups.fixed || []).map(renderTaskRow).join('') || '<tr><td colspan="6" class="center text-muted">暂无固定计划</td></tr>');
-        $('#manualTasks').html((groups.manual || []).map(renderTaskRow).join('') || '<tr><td colspan="6" class="center text-muted">暂无手动任务</td></tr>');
-        $('#notifyTasks').html((groups.notify || []).map(renderTaskRow).join('') || '<tr><td colspan="6" class="center text-muted">暂无通知监控任务</td></tr>');
+    function renderPipelineStages(groups) {
+        var container = $('#pipelineStages');
+        container.empty();
+        for (var i = 0; i < PIPELINE_STAGES.length; i++) {
+            var stage = PIPELINE_STAGES[i];
+            var tasks = groups[stage.key] || [];
+            var html = '<div class="console-section">';
+            html += '<div class="console-section-header">';
+            html += '<h4 class="console-section-title">' + stageBadge(stage.key) + escapeHtml(stage.label) + ' <span class="console-section-subtitle">' + escapeHtml(stage.desc) + '</span></h4>';
+            html += '<small class="text-muted">' + tasks.length + ' 个任务</small>';
+            html += '</div>';
+            html += '<div class="console-section-body"><div class="table-wrap"><table class="table table-hover task-table"><thead><tr><th>任务</th><th>状态</th><th>计划/下次</th><th>最近执行</th><th>耗时</th><th>操作</th></tr></thead><tbody>';
+            if (tasks.length) {
+                for (var j = 0; j < tasks.length; j++) {
+                    html += renderTaskRow(tasks[j]);
+                }
+            } else {
+                html += '<tr><td colspan="6" class="center text-muted">暂无任务</td></tr>';
+            }
+            html += '</tbody></table></div></div></div>';
+            container.append(html);
+        }
     }
 
-
     function renderRuns(rows) {
-        const tbody = $('#recentRows');
+        var tbody = $('#recentRows');
         tbody.empty();
         if (!rows.length) {
             tbody.append('<tr><td colspan="9" class="center">暂无系统任务记录</td></tr>');
             return;
         }
-        rows.forEach(function(row) {
-            const actions = '<button class="btn btn-xs btn-info js-log" data-run="' + escapeHtml(row.run_id || '') + '">日志</button>' +
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var actions = '<button class="btn btn-xs btn-info js-log" data-run="' + escapeHtml(row.run_id || '') + '">日志</button>' +
                 (row.status === 'running' ? ' <button class="btn btn-xs btn-danger js-stop" data-task="' + escapeHtml(row.task_key || '') + '" data-run="' + escapeHtml(row.run_id || '') + '">停止</button>' : '');
             tbody.append('<tr>' +
                 '<td>' + escapeHtml(row.task_name || row.task_key || '') + '</td>' +
-                '<td>' + escapeHtml(categoryLabel(row.category)) + '</td>' +
+                '<td>' + stageBadge(row.category) + '</td>' +
                 '<td>' + escapeHtml(triggerLabel(row.trigger_type)) + '</td>' +
                 '<td>' + statusChip(row.status, row.timed_out) + '</td>' +
                 '<td>' + escapeHtml(row.start_time || '') + '</td>' +
@@ -681,17 +718,18 @@
                 '<td class="message-cell" title="' + escapeHtml(row.message || '') + '">' + escapeHtml(row.message || '') + '</td>' +
                 '<td>' + actions + '</td>' +
                 '</tr>');
-        });
+        }
     }
 
     function renderJobRuns(rows) {
-        const tbody = $('#jobRows');
+        var tbody = $('#jobRows');
         tbody.empty();
         if (!rows.length) {
             tbody.append('<tr><td colspan="8" class="center">暂无业务子任务记录</td></tr>');
             return;
         }
-        rows.forEach(function(row) {
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
             tbody.append('<tr>' +
                 '<td>' + escapeHtml(row.run_date || '') + '</td>' +
                 '<td>' + escapeHtml(row.job_name || '') + '</td>' +
@@ -702,19 +740,19 @@
                 '<td>' + escapeHtml(row.rows_written == null ? '' : row.rows_written) + '</td>' +
                 '<td class="message-cell" title="' + escapeHtml(row.message || '') + '">' + escapeHtml(row.message || '') + '</td>' +
                 '</tr>');
-        });
+        }
     }
 
     function renderNotices(rows) {
-        const open = rows.filter(function(row) { return row.status === 'open'; });
-        const history = rows.filter(function(row) { return row.status !== 'open'; });
-        const openBox = $('#noticeRows');
-        const historyBox = $('#noticeHistory');
+        var open = rows.filter(function(row) { return row.status === 'open'; });
+        var history = rows.filter(function(row) { return row.status !== 'open'; });
+        var openBox = $('#noticeRows');
+        var historyBox = $('#noticeHistory');
         openBox.empty();
         historyBox.empty();
         if (!open.length) openBox.html('<div class="console-empty">暂无待处理通知</div>');
         open.forEach(function(row) {
-            const cls = row.level === 'error' ? ' error' : '';
+            var cls = row.level === 'error' ? ' error' : '';
             openBox.append('<div class="notice-card' + cls + '"><div class="notice-title-row"><b>' + escapeHtml(row.title || '') + '</b><button class="btn btn-xs btn-white js-ack" data-notice="' + escapeHtml(row.notice_id || '') + '">确认</button></div><div>' + escapeHtml(row.message || '') + '</div><small>' + escapeHtml(row.created_at || '') + '</small></div>');
         });
         if (!history.length) historyBox.html('<div class="console-empty">暂无历史通知</div>');
@@ -724,15 +762,15 @@
     }
 
     function renderTimeline(recent, jobRecent) {
-        const rows = [];
+        var rows = [];
         (recent || []).forEach(function(row) {
-            rows.push({time: row.start_time, title: row.task_name || row.task_key || '', type: categoryLabel(row.category), status: row.status, timedOut: row.timed_out});
+            rows.push({time: row.start_time, title: row.task_name || row.task_key || '', type: stageLabel(row.category), status: row.status, timedOut: row.timed_out});
         });
         (jobRecent || []).forEach(function(row) {
             rows.push({time: row.start_time, title: row.job_name || '', type: '业务子任务', status: row.status, timedOut: false});
         });
         rows.sort(function(a, b) { return String(b.time || '').localeCompare(String(a.time || '')); });
-        const box = $('#timelineRows');
+        var box = $('#timelineRows');
         box.empty();
         if (!rows.length) {
             box.html('<div class="console-empty">暂无时间线记录</div>');
@@ -759,17 +797,17 @@
     }
 
     function updateOverview(data) {
-        const overview = data.overview || {};
-        const summary = overview.summary || data.summary || {};
-        const problemCount = (summary.failed || 0) + (summary.stopped || 0);
+        var overview = data.overview || {};
+        var summary = overview.summary || data.summary || {};
+        var problemCount = (summary.failed || 0) + (summary.stopped || 0);
         $('#todayText').text(data.today || overview.today || '--');
         $('#totalCount').text(summary.total || 0);
         $('#runningCount').text(summary.running || 0);
         $('#successCount').text(summary.success || 0);
         $('#problemCount').text(problemCount);
         $('#noticeCount').text(overview.open_notices || 0);
-        const schedulerEnabled = !!overview.scheduler_enabled;
-        const schedulerAlive = !!overview.scheduler_alive;
+        var schedulerEnabled = !!overview.scheduler_enabled;
+        var schedulerAlive = !!overview.scheduler_alive;
         $('#schedulerPill').removeClass('enabled stale disabled');
         if (!schedulerEnabled) {
             $('#schedulerPill').addClass('disabled');
@@ -789,12 +827,12 @@
         $('#consoleError').hide();
         $.getJSON('/instock/console/api/status', function(data) {
             updateOverview(data);
-            const groups = {fixed: [], manual: [], notify: []};
+            var groups = {};
             (data.tasks || []).forEach(function(task) {
                 groups[task.category] = groups[task.category] || [];
                 groups[task.category].push(task);
             });
-            renderTasks(groups);
+            renderPipelineStages(groups);
             renderRuns(data.recent || []);
             renderJobRuns(data.job_recent || []);
             renderNotices(data.notices || []);
@@ -817,13 +855,13 @@
         $(this).text(noticeHistoryVisible ? '隐藏历史通知' : '显示历史通知');
     });
     $('#copyLogButton').on('click', function() {
-        const text = $('#logContent').text();
+        var text = $('#logContent').text();
         if (navigator.clipboard) {
             navigator.clipboard.writeText(text);
             alert('日志已复制');
             return;
         }
-        const range = document.createRange();
+        var range = document.createRange();
         range.selectNode(document.getElementById('logContent'));
         window.getSelection().removeAllRanges();
         window.getSelection().addRange(range);

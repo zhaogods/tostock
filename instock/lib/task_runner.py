@@ -292,8 +292,8 @@ def set_task_enabled(task_key, enabled):
     task = registry.get_task(task_key)
     if task is None:
         return False, '未知任务'
-    if task.category == registry.CATEGORY_INTERNAL:
-        return False, '内部任务不允许切换'
+    if not task.visible:
+        return False, '该任务不允许切换'
     _update_state(task_key, enabled=enabled)
     return True, '已更新任务状态'
 
@@ -515,8 +515,8 @@ def start_task(task_key, trigger_type='manual', date_arg='', start_date='', end_
     task = registry.get_task(task_key)
     if task is None:
         return False, {'message': '未知任务'}
-    if task.category == registry.CATEGORY_INTERNAL:
-        return False, {'message': '内部任务不能直接启动'}
+    if not task.visible:
+        return False, {'message': '该任务不能直接启动'}
     if trigger_type == 'manual' and not task.allow_manual_start:
         return False, {'message': '任务不允许手动启动'}
     if trigger_type == 'schedule' and not task_enabled(task_key):

@@ -55,7 +55,7 @@ class ConsoleTasksApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
         try:
             task_runner.ensure_task_states()
             tasks = task_runner.task_payloads()
-            groups = {'fixed': [], 'manual': [], 'notify': []}
+            groups = {}
             for task in tasks:
                 groups.setdefault(task.get('category'), []).append(task)
             self.write_json({'ok': True, 'tasks': tasks, 'groups': groups})
