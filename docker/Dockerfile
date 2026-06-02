@@ -58,4 +58,7 @@ RUN chmod 755 /data/tostock/instock/bin/run_*.sh && \
         > /var/spool/cron/crontabs/root && \
     chmod 600 /var/spool/cron/crontabs/root
 
-ENTRYPOINT ["supervisord","-n","-c","/data/tostock/supervisor/supervisord.conf"]
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod 755 /docker-entrypoint.sh
+
+ENTRYPOINT ["/bin/sh", "/docker-entrypoint.sh"]
