@@ -428,8 +428,8 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
             try:
                 if is_cache:
                     stock.to_pickle(cache_file, compression="gzip")
-            except Exception:
-                pass
+            except Exception as e:
+                logging.warning(f"stockfetch.stock_hist_cache写入缓存失败：{code} {e}")
             return stock
     except Exception as e:
         logging.error(f"stockfetch.stock_hist_cache处理异常：{code}代码{e}")

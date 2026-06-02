@@ -39,6 +39,7 @@ services:
     volumes:
       - ./data/instockproxy.txt:/data/tostock/instock/config/proxy.txt
       - ./data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt
+      - ./data/cache/hist:/data/tostock/instock/cache/hist
       - ./docker/docker-entrypoint.sh:/docker-entrypoint.sh:ro
     entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
     depends_on:
