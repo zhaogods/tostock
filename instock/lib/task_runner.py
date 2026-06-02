@@ -99,7 +99,10 @@ def _job_dir():
 
 
 def _python_executable():
-    venv_python = _project_root() / '.venv' / 'Scripts' / 'python.exe'
+    if sys.platform == 'win32':
+        venv_python = _project_root() / '.venv' / 'Scripts' / 'python.exe'
+    else:
+        venv_python = _project_root() / '.venv' / 'bin' / 'python3'
     if venv_python.exists():
         return str(venv_python)
     return sys.executable

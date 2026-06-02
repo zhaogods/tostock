@@ -76,7 +76,7 @@ def get_db_config(mask_password=False):
         'host': 'localhost',
         'user': 'root',
         'password': '',
-        'database': 'instockdb',
+        'database': 'test',
         'port': 3306,
         'charset': 'utf8mb4',
     }

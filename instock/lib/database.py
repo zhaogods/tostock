@@ -16,7 +16,7 @@ _db_config = config.get_db_config()
 db_host = _db_config.get('host', 'localhost')
 db_user = _db_config.get('user', 'root')
 db_password = _db_config.get('password', '')
-db_database = _db_config.get('database', 'instockdb')
+db_database = _db_config.get('database', 'test')
 db_port = int(_db_config.get('port', 3306))
 db_charset = _db_config.get('charset', 'utf8mb4')
 
@@ -35,14 +35,19 @@ MYSQL_CONN_TORNDB = {'host': f'{db_host}:{str(db_port)}', 'user': db_user, 'pass
                      'database': db_database, 'charset': db_charset, 'max_idle_time': 3600, 'connect_timeout': 1000}
 
 
+_engines = {}
+
 # 通过数据库链接 engine
 def engine():
-    return create_engine(MYSQL_CONN_URL)
+    if None not in _engines:
+        _engines[None] = create_engine(MYSQL_CONN_URL)
+    return _engines[None]
 
 
 def engine_to_db(to_db):
-    _engine = create_engine(MYSQL_CONN_URL.replace(f'/{db_database}?', f'/{to_db}?'))
-    return _engine
+    if to_db not in _engines:
+        _engines[to_db] = create_engine(MYSQL_CONN_URL.replace(f'/{db_database}?', f'/{to_db}?'))
+    return _engines[to_db]
 
 
 def _run_date_from_data(data):
@@ -117,8 +122,12 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
     if not ipt.get_pk_constraint(table_name)['constrained_columns']:
         try:
             # 执行数据库插入数据。
-            with get_connection() as conn:
-                with conn.cursor() as db:
+            conn = get_connection()
+            if conn is None:
+                logging.error(f"database.insert_other_db_from_df：无法获取数据库连接，跳过 {table_name} 表主键设置")
+                return
+            with conn as conn_ctx:
+                with conn_ctx.cursor() as db:
                     db.execute(f'ALTER TABLE `{table_name}` ADD PRIMARY KEY ({primary_keys});')
                     if indexs is not None:
                         for k in indexs:
