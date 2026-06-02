@@ -39,6 +39,7 @@ RUN sed '/TA_Lib/d' /tmp/requirements.txt > /tmp/requirements_docker.txt && \
 WORKDIR /data
 #tostock软件
 COPY instock /data/tostock/instock
+COPY supervisor /data/tostock/supervisor
 COPY requirements.txt /data/tostock/requirements.txt
 COPY cron/cron.hourly /etc/cron.hourly
 COPY cron/cron.workdayly /etc/cron.workdayly
