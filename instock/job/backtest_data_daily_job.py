@@ -16,6 +16,7 @@ import instock.core.tablestructure as tbs
 import instock.lib.database as mdb
 import instock.core.backtest.rate_stats as rate
 import instock.core.stockfetch as stf
+from instock.lib import config
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
@@ -29,7 +30,9 @@ def _date_start_for_backtest(date_value):
     return (date_end + datetime.timedelta(days=-(365 * 3))).strftime('%Y%m%d')
 
 
-def load_hist_data(stocks, workers=8):
+def load_hist_data(stocks, workers=None):
+    if workers is None:
+        workers = config.get_backtest_stock_workers(4)
     data = {}
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
@@ -62,9 +65,10 @@ def prepare():
     backtest_column = backtest_columns
 
     # 回归测试表
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for table in tables:
-            executor.submit(process, table, backtest_column)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=config.get_backtest_table_workers(4)) as executor:
+        futures = [executor.submit(process, table, backtest_column) for table in tables]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
 
 
 def process(table, backtest_column):
@@ -101,7 +105,9 @@ def process(table, backtest_column):
         logging.error(f"backtest_data_daily_job.process处理异常：{table}表{e}")
 
 
-def run_check(stocks, data_all, backtest_column, workers=40):
+def run_check(stocks, data_all, backtest_column, workers=None):
+    if workers is None:
+        workers = config.get_backtest_check_workers(40)
     data = {}
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:

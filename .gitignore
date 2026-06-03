@@ -75,6 +75,9 @@ instance/
 # Environment config (contains real credentials, DO NOT commit)
 .env
 
+# Docker Compose runtime data (database files, proxy/cookie placeholders)
+data/
+
 # Sensitive config files (replace with your own)
 instock/config/database.json
 instock/config/tushare.json

@@ -28,7 +28,11 @@ services:
     env_file:
       - .env
     environment:
-      - db_host=InStockDbService
+      - db_host=${db_host:-InStockDbService}
+      - db_port=${db_port:-3306}
+      - db_user=${db_user:-root}
+      - db_password=${db_password:-root}
+      - db_database=${db_database:-test}
       - Tornado_COOKIE_SECRET=${Tornado_COOKIE_SECRET}
       - TUSHARE_TOKEN=${TUSHARE_TOKEN}
       - TUSHARE_DAILY_RATE=${TUSHARE_DAILY_RATE:-400}

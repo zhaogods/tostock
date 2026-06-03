@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import math
+
 import pymysql
 from sqlalchemy import create_engine
 from sqlalchemy.types import NVARCHAR
@@ -73,6 +75,29 @@ def _record_data_quality(table_name, data):
         logging.error(f"database._record_data_quality处理异常：{table_name}{exc}")
 
 
+def _sanitize_db_value(value):
+    if value is None:
+        return None
+    try:
+        if math.isnan(value) or math.isinf(value):
+            return None
+    except Exception:
+        pass
+    try:
+        if value != value:
+            return None
+    except Exception:
+        pass
+    return value
+
+
+def _sanitize_dataframe_for_db(data):
+    try:
+        return data.replace([float('inf'), float('-inf')], None)
+    except Exception:
+        return data
+
+
 # DB Api -数据库连接对象connection
 def get_connection():
     try:
@@ -103,6 +128,7 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
     if write_index:
         # 插入到第一个位置：
         col_name_list.insert(0, data.index.name)
+    data = _sanitize_dataframe_for_db(data)
     if to_db is None:
         _record_data_quality(table_name, data)
     try:
@@ -138,7 +164,8 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
 
 # 更新数据
 def update_db_from_df(data, table_name, where):
-    data = data.where(data.notnull(), None)
+    data = _sanitize_dataframe_for_db(data)
+    data = data.astype(object).where(data.notnull(), None)
     cols = tuple(data.columns)
     where = tuple(where)
     set_cols = tuple(col for col in cols if col not in where)
@@ -157,8 +184,8 @@ def update_db_from_df(data, table_name, where):
             try:
                 for row in data.itertuples(index=False, name=None):
                     row_map = dict(zip(cols, row))
-                    params = [row_map[col] for col in set_cols]
-                    params.extend(row_map[col] for col in where)
+                    params = [_sanitize_db_value(row_map[col]) for col in set_cols]
+                    params.extend(_sanitize_db_value(row_map[col]) for col in where)
                     db.execute(sql, params)
             except Exception as e:
                 logging.error(f"database.update_db_from_df处理异常：{sql}{e}")

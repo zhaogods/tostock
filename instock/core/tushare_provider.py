@@ -3,7 +3,6 @@
 
 import datetime
 import logging
-import threading
 import time
 
 import numpy as np
@@ -11,6 +10,7 @@ import pandas as pd
 import tushare as ts
 
 from instock.lib import config
+from instock.lib.rate_limiter import get_global_rate_limiter
 
 
 class TushareProvider:
@@ -20,8 +20,6 @@ class TushareProvider:
         'moneyflow': 'TUSHARE_MONEYFLOW_RATE',
         'stock_basic': 'TUSHARE_STOCK_BASIC_RATE',
     }
-    _throttle_locks = {api_name: threading.Lock() for api_name in _API_RATE_ENV}
-    _last_call = {}
 
     STOCK_SPOT_COLUMNS = (
         'date', 'code', 'name', 'new_price', 'change_rate', 'ups_downs',
@@ -46,6 +44,8 @@ class TushareProvider:
         ts.set_token(token)
         self.pro = ts.pro_api()
         self._rate_limits = self._read_rate_limits()
+        self._retry_config = config.get_tushare_retry_config()
+        self._rate_limiter = get_global_rate_limiter()
 
     @classmethod
     def _read_rate_limits(cls):
@@ -53,16 +53,35 @@ class TushareProvider:
 
     def _throttle(self, api_name):
         rate = self._rate_limits[api_name]
-        interval = 60.0 / rate
-        lock = self._throttle_locks[api_name]
-        with lock:
-            now = time.monotonic()
-            last = self._last_call.get(api_name, 0)
-            wait = interval - (now - last)
-            if wait > 0:
-                time.sleep(wait)
-                now = time.monotonic()
-            self._last_call[api_name] = now
+        self._rate_limiter.wait(f'tushare:{api_name}', rate)
+
+    @staticmethod
+    def _is_rate_limit_error(exc):
+        message = str(exc).lower()
+        return any(keyword in message for keyword in (
+            '频率超限', '频次', 'rate limit', 'too many requests', '每分钟', 'minute'
+        ))
+
+    def _call_with_retry(self, api_name, description, callback):
+        retry_total = max(0, int(self._retry_config.get('total', 0)))
+        sleep_seconds = max(1, int(self._retry_config.get('sleep_seconds', 60)))
+        for attempt in range(retry_total + 1):
+            self._throttle(api_name)
+            try:
+                return callback()
+            except Exception as exc:
+                if not self._is_rate_limit_error(exc):
+                    logging.warning(f"Tushare {description} 失败：{exc}")
+                    return None
+                if attempt >= retry_total:
+                    logging.warning(f"Tushare {description} 频率超限，重试耗尽：{exc}")
+                    return None
+                logging.warning(
+                    f"Tushare {description} 频率超限，等待 {sleep_seconds}s 后重试 "
+                    f"({attempt + 1}/{retry_total})：{exc}"
+                )
+                time.sleep(sleep_seconds)
+        return None
 
     @staticmethod
     def _read_token():
@@ -83,11 +102,12 @@ class TushareProvider:
     def _get_stock_names(self):
         if hasattr(self, '_stock_names_cache'):
             return self._stock_names_cache
-        self._throttle('stock_basic')
+        basic = self._call_with_retry(
+            'stock_basic',
+            'stock_basic(name)',
+            lambda: self.pro.stock_basic(exchange='', list_status='L', fields='ts_code,name')
+        )
         try:
-            basic = self.pro.stock_basic(
-                exchange='', list_status='L',
-                fields='ts_code,name')
             if basic is not None and not basic.empty:
                 basic['code'] = basic['ts_code'].apply(self.from_ts_code)
                 self._stock_names_cache = dict(zip(basic['code'], basic['name']))
@@ -100,20 +120,19 @@ class TushareProvider:
     # ---- 股票实时行情 ----
     def fetch_stock_spot(self, date):
         date_str = date.strftime('%Y%m%d')
-        self._throttle('daily')
-        try:
-            daily = self.pro.daily(trade_date=date_str)
-        except Exception as e:
-            logging.warning(f"Tushare daily 接口失败：{e}")
-            return None
+        daily = self._call_with_retry(
+            'daily',
+            f'daily({date_str})',
+            lambda: self.pro.daily(trade_date=date_str)
+        )
         if daily is None or daily.empty:
             return None
 
-        self._throttle('daily_basic')
-        try:
-            basic = self.pro.daily_basic(ts_code='', trade_date=date_str)
-        except Exception:
-            basic = None
+        basic = self._call_with_retry(
+            'daily_basic',
+            f'daily_basic({date_str})',
+            lambda: self.pro.daily_basic(ts_code='', trade_date=date_str)
+        )
 
         if basic is not None and not basic.empty:
             df = daily.merge(basic, on=['ts_code', 'trade_date'], how='left', suffixes=('', '_basic'))
@@ -197,12 +216,11 @@ class TushareProvider:
         if date is None:
             date = datetime.date.today()
         trade_date = date.strftime('%Y%m%d')
-        self._throttle('moneyflow')
-        try:
-            mf = self.pro.moneyflow(trade_date=trade_date)
-        except Exception as e:
-            logging.warning(f"Tushare moneyflow 接口失败：{e}")
-            return None
+        mf = self._call_with_retry(
+            'moneyflow',
+            f'moneyflow({trade_date})',
+            lambda: self.pro.moneyflow(trade_date=trade_date)
+        )
         if mf is None or mf.empty:
             return None
 
@@ -245,13 +263,11 @@ class TushareProvider:
     def fetch_stock_hist(self, code, start_date, end_date,
                          period='daily', adjust='qfq'):
         ts_code = self.to_ts_code(code)
-        self._throttle('daily')
-        try:
-            df = self.pro.daily(
-                ts_code=ts_code, start_date=start_date, end_date=end_date)
-        except Exception as e:
-            logging.warning(f"Tushare daily({code}) 失败：{e}")
-            return None
+        df = self._call_with_retry(
+            'daily',
+            f'daily({code})',
+            lambda: self.pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+        )
         if df is None or df.empty:
             return None
 
@@ -296,7 +312,7 @@ class TushareProvider:
 
         count = 0
         total = len(codes)
-        rate_limit = int(_os.environ['TUSHARE_RATE_LIMIT'])
+        rate_limit = max(1, config.get_tushare_batch_rate_limit())
 
         for i, code in enumerate(codes):
             cache_file = _os.path.join(
@@ -317,10 +333,12 @@ class TushareProvider:
         return count
 
     def _get_all_codes(self):
-        self._throttle('stock_basic')
+        basic = self._call_with_retry(
+            'stock_basic',
+            'stock_basic(codes)',
+            lambda: self.pro.stock_basic(exchange='', list_status='L', fields='ts_code')
+        )
         try:
-            basic = self.pro.stock_basic(
-                exchange='', list_status='L', fields='ts_code')
             if basic is not None and not basic.empty:
                 return sorted(basic['ts_code'].apply(self.from_ts_code).tolist())
         except Exception:

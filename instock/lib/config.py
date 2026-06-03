@@ -112,18 +112,14 @@ def get_tushare_token():
 
 def get_tushare_rate_limits():
     env_names = {
-        'daily': 'TUSHARE_DAILY_RATE',
-        'daily_basic': 'TUSHARE_DAILY_BASIC_RATE',
-        'moneyflow': 'TUSHARE_MONEYFLOW_RATE',
-        'stock_basic': 'TUSHARE_STOCK_BASIC_RATE',
+        'daily': ('TUSHARE_DAILY_RATE', 400),
+        'daily_basic': ('TUSHARE_DAILY_BASIC_RATE', 150),
+        'moneyflow': ('TUSHARE_MONEYFLOW_RATE', 150),
+        'stock_basic': ('TUSHARE_STOCK_BASIC_RATE', 40),
     }
-    missing = []
     rates = {}
-    for api_name, env_name in env_names.items():
-        value = _env(env_name)
-        if value is None:
-            missing.append(env_name)
-            continue
+    for api_name, (env_name, default) in env_names.items():
+        value = _env(env_name, default)
         try:
             rate = int(value)
         except ValueError as exc:
@@ -131,9 +127,38 @@ def get_tushare_rate_limits():
         if rate <= 0:
             raise RuntimeError(f'Tushare 频率配置 {env_name} 必须大于 0')
         rates[api_name] = rate
-    if missing:
-        raise RuntimeError(f"Tushare 频率配置缺失：{', '.join(missing)}")
     return rates
+
+
+def get_tushare_batch_rate_limit():
+    return get_int('TUSHARE_RATE_LIMIT', 180)
+
+
+def get_tushare_retry_config():
+    return {
+        'total': get_int('TUSHARE_RETRY_TOTAL', 5),
+        'sleep_seconds': get_int('TUSHARE_RETRY_SLEEP_SECONDS', 60),
+    }
+
+
+def get_job_date_workers():
+    return max(1, get_int('JOB_DATE_WORKERS', 1))
+
+
+def get_stock_workers(default=4):
+    return max(1, get_int('STOCK_WORKERS', default))
+
+
+def get_backtest_stock_workers(default=4):
+    return max(1, get_int('BACKTEST_STOCK_WORKERS', get_stock_workers(default)))
+
+
+def get_backtest_check_workers(default=40):
+    return max(1, get_int('BACKTEST_CHECK_WORKERS', default))
+
+
+def get_backtest_table_workers(default=4):
+    return max(1, get_int('BACKTEST_TABLE_WORKERS', default))
 
 
 def get_web_config():
