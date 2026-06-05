@@ -6,17 +6,6 @@ services:
     volumes:
       - ./data:/config
 
-  instockdbservice:
-    image: library/mariadb:latest
-    container_name: InStockDbService
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${db_database:-test}
-    volumes:
-      - ./data/mariadb:/var/lib/mysql
-    networks:
-      - instock_network
-
   instock:
     image: zsswwz/tostock:latest
     build:
@@ -49,8 +38,6 @@ services:
     depends_on:
       instock_config_init:
         condition: service_completed_successfully
-      instockdbservice:
-        condition: service_started
     networks:
       - instock_network
 

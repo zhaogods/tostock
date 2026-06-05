@@ -1,0 +1,20 @@
+# docker-compose 覆盖配置
+# 用于本地开发，启动本地 MariaDB 数据库
+# 使用方式：docker compose up -d
+# 如果不需要本地数据库，删除或重命名此文件即可
+
+services:
+  instockdbservice:
+    image: library/mariadb:latest
+    container_name: InStockDbService
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${db_database:-test}
+    volumes:
+      - ./data/mariadb:/var/lib/mysql
+    networks:
+      - instock_network
+
+  instock:
+    depends_on:
+      - instockdbservice

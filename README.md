@@ -522,7 +522,35 @@ sudo sh -c 'echo "你的Cookie值" > /data/eastmoneycookie.txt'
 
 ```
 
-### 3.安装数据库镜像
+### 3.数据库配置方式
+
+本项目支持两种数据库部署方式：
+
+#### 方式一：使用远程数据库（推荐用于生产环境）
+
+**适用场景**：使用阿里云 RDS、腾讯云 MySQL 等远程数据库
+
+**配置步骤**：
+1. 删除或重命名 `docker-compose.override.yml` 文件（如果使用 docker-compose 部署）
+2. 在 `.env` 文件中配置远程数据库连接信息
+3. 直接启动应用容器，无需启动本地数据库容器
+
+**优点**：节省本地资源，数据持久化由云服务保障
+
+#### 方式二：使用本地 Docker 数据库（适合开发测试）
+
+**适用场景**：本地开发、测试环境
+
+**配置步骤**：
+1. 保留 `docker-compose.override.yml` 文件（如果使用 docker-compose 部署）
+2. 在 `.env` 文件中配置本地数据库连接（db_host=InStockDbService）
+3. 同时启动应用容器和 MariaDB 容器
+
+**优点**：环境隔离，便于开发调试
+
+---
+
+### 4.安装数据库镜像
 
 如果已经有Mysql、mariadb数据库可以跳过本步。
 
@@ -540,9 +568,9 @@ docker run -d --name InStockDbService \
     library/mariadb:latest
 ```
 
-### 4.安装本系统镜像
+### 5.安装本系统镜像
 
-a.若按上面【1.安装数据库镜像】装的数据库，运行下面命令：
+a.若按上面【4.安装数据库镜像】装的数据库，运行下面命令：
 
 ```
 docker run -dit --name InStock --network=InStockService \
@@ -596,13 +624,13 @@ TUSHARE_RATE_LIMIT        # 批量历史缓存每分钟批次数
 ```
 按自己数据库实际情况配置参数。
 
-### 5. 系统运行
+### 6. 系统运行
 
 启动容器后，会自动运行，首先会初始化数据、启动web服务。盘中每30分钟执行 `realtime_only_job.py`（仅刷新实时行情），每天17:30执行 `execute_daily_job.py`（全量数据抓取、处理、分析）。
 
 打开浏览器，输入：http://localhost:9988/ ，即可使用本系统的可视化功能。
 
-### 6.历史数据
+### 7.历史数据
 
 历史数据抓取、处理、分析、识别、回测，运行下面命令：
 
@@ -631,7 +659,7 @@ python execute_daily_job.py 2023-03-01,2023-03-02
 修改run_job.sh，然后运行 bash InStock/instock/bin/run_job.sh
 ```
 
-### 7.查看日志
+### 8.查看日志
 
 运行下面命令：
 
@@ -641,7 +669,7 @@ cat InStock/instock/log/stock_execute_job.log
 cat InStock/instock/log/stock_web.log
 ```
 
-### 8.docker常用命令
+### 9.docker常用命令
 
 ```
 docker container stop InStock InStockDbService
@@ -654,7 +682,7 @@ docker rmi zsswwz/tostock:latest library/mariadb:latest
 
 具体参见：[Docker基础之 二.镜像及容器的基本操作](https://www.ljjyy.com/archives/2018/06/100208.html)
 
-### 9.自动交易
+### 10.自动交易
 
 目前只支持windows。参考常规安装方式,只需安装python、依赖库，**不需安装mysql、talib等**。
 
