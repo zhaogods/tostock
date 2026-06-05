@@ -124,9 +124,14 @@ class eastmoney_fetcher:
                     proxys().mark_ok()
                 return response
             except requests.exceptions.RequestException as e:
-                if not self.has_cookie:
-                    proxys().mark_failed(proxies)
-                print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
+                # 502 是网站问题，不是代理问题
+                if hasattr(e, 'response') and e.response is not None and e.response.status_code == 502:
+                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试")
+                else:
+                    if not self.has_cookie:
+                        proxys().mark_failed(proxies)
+                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
+
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
                 else:
@@ -163,9 +168,14 @@ class eastmoney_fetcher:
                     proxys().mark_ok()
                 return response
             except requests.exceptions.RequestException as e:
-                if not self.has_cookie:
-                    proxys().mark_failed(proxies)
-                print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
+                # 502 是网站问题，不是代理问题
+                if hasattr(e, 'response') and e.response is not None and e.response.status_code == 502:
+                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试")
+                else:
+                    if not self.has_cookie:
+                        proxys().mark_failed(proxies)
+                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
+
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
                 else:

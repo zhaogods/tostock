@@ -46,7 +46,7 @@ class GetStockHtmlHandler(webBase.BaseHandler, ABC):
 # 获得股票数据内容。
 class GetStockDataHandler(webBase.BaseHandler, ABC):
     def get(self):
-        name = self.get_argument("name", default=None, strip=False)
+        name = self.get_argument("table_name", default=None, strip=False)
         date = self.get_argument("date", default=None, strip=False)
         web_module_data = sswmd.stock_web_module_data().get_data(name)
         self.set_header('Content-Type', 'application/json;charset=UTF-8')

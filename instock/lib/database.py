@@ -29,7 +29,7 @@ MYSQL_CONN_LOG_URL = "mysql+pymysql://%s:%s@%s:%s/%s?charset=%s" % (
 logging.info(f"数据库链接信息：{MYSQL_CONN_LOG_URL}")
 
 MYSQL_CONN_DBAPI = {'host': db_host, 'user': db_user, 'password': db_password, 'database': db_database,
-                    'charset': db_charset, 'port': db_port, 'autocommit': True}
+                    'charset': db_charset, 'port': db_port, 'connect_timeout': 10, 'autocommit': True}
 MYSQL_CONN_DBAPI_LOG = MYSQL_CONN_DBAPI.copy()
 MYSQL_CONN_DBAPI_LOG['password'] = '***' if db_password else ''
 
@@ -42,13 +42,25 @@ _engines = {}
 # 通过数据库链接 engine
 def engine():
     if None not in _engines:
-        _engines[None] = create_engine(MYSQL_CONN_URL)
+        _engines[None] = create_engine(
+            MYSQL_CONN_URL,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            pool_size=10,
+            max_overflow=20
+        )
     return _engines[None]
 
 
 def engine_to_db(to_db):
     if to_db not in _engines:
-        _engines[to_db] = create_engine(MYSQL_CONN_URL.replace(f'/{db_database}?', f'/{to_db}?'))
+        _engines[to_db] = create_engine(
+            MYSQL_CONN_URL.replace(f'/{db_database}?', f'/{to_db}?'),
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            pool_size=10,
+            max_overflow=20
+        )
     return _engines[to_db]
 
 
