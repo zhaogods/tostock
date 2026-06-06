@@ -304,13 +304,19 @@ def _cleanup_stale_running_rows():
         if not run_id or run_id in _RUNNING_PROCESSES:
             continue
         pid = row.get('pid')
-        if _pid_exists(pid):
-            continue
         start_time = row.get('start_time')
-        message = '运行进程已不存在，自动修正状态'
+
         if not pid:
-            message = '运行记录缺少进程ID，自动修正状态'
-        _finish_run(run_id, STATUS_FAILED, start_time, message)
+            _finish_run(run_id, STATUS_FAILED, start_time, '运行记录缺少进程ID，自动修正状态')
+            continue
+
+        elapsed = _elapsed_seconds(start_time)
+        if _pid_exists(pid):
+            if elapsed > 7200:
+                _finish_run(run_id, STATUS_FAILED, start_time, '任务运行时间过长且进程状态异常，自动修正状态')
+            continue
+
+        _finish_run(run_id, STATUS_FAILED, start_time, '运行进程已不存在，自动修正状态')
 
 
 def _cleanup_processes():
@@ -562,6 +568,7 @@ def start_task(task_key, trigger_type='manual', date_arg='', start_date='', end_
 
     command, cwd = _command_for_task(task, args)
     run_id, start_time = _create_run(task, trigger_type, args, log_path=str(log_path), run_id=run_id)
+    log_file = None
     try:
         log_file = open(log_path, 'a', encoding='utf-8')
         proc = subprocess.Popen(command, cwd=cwd, stdout=log_file, stderr=subprocess.STDOUT)
@@ -571,6 +578,11 @@ def start_task(task_key, trigger_type='manual', date_arg='', start_date='', end_
         return True, {'message': '任务已启动', 'run_id': run_id, 'pid': proc.pid}
     except Exception as exc:
         logging.exception(f'task_runner.start_task处理异常：{task.key}')
+        if log_file is not None:
+            try:
+                log_file.close()
+            except Exception:
+                pass
         _finish_run(run_id, STATUS_FAILED, start_time, exc)
         return False, {'message': '任务启动失败', 'run_id': run_id}
 
@@ -595,7 +607,15 @@ def stop_task(run_id='', task_key=''):
             return False, {'message': '该任务不支持停止'}
         proc = state['process']
         proc.terminate()
-        _finish_run(target_run_id, STATUS_STOPPED, state['start_time'], '已发送停止信号')
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                pass
+        _finish_run(target_run_id, STATUS_STOPPED, state['start_time'], '已停止')
         try:
             state['log_file'].close()
         except Exception:
