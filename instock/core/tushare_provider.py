@@ -11,6 +11,7 @@ import tushare as ts
 
 from instock.lib import config
 from instock.lib.rate_limiter import get_global_rate_limiter
+from instock.lib.fetch_result import FetchResult, FetchStatus
 
 
 class TushareProvider:
@@ -62,26 +63,38 @@ class TushareProvider:
             '频率超限', '频次', 'rate limit', 'too many requests', '每分钟', 'minute'
         ))
 
+    @staticmethod
+    def _is_network_error(exc):
+        exc_type = type(exc).__name__
+        message = str(exc).lower()
+        return any(k in exc_type.lower() or k in message for k in (
+            'timeout', 'connection', 'network', 'unreachable'
+        ))
+
     def _call_with_retry(self, api_name, description, callback):
         retry_total = max(0, int(self._retry_config.get('total', 0)))
         sleep_seconds = max(1, int(self._retry_config.get('sleep_seconds', 60)))
         for attempt in range(retry_total + 1):
             self._throttle(api_name)
             try:
-                return callback()
+                data = callback()
+                return FetchResult(FetchStatus.SUCCESS, data)
             except Exception as exc:
+                if self._is_network_error(exc):
+                    logging.warning(f"Tushare {description} 网络错误：{exc}")
+                    return FetchResult(FetchStatus.NETWORK_ERROR, message=str(exc))
                 if not self._is_rate_limit_error(exc):
-                    logging.warning(f"Tushare {description} 失败：{exc}")
-                    return None
+                    logging.warning(f"Tushare {description} API错误：{exc}")
+                    return FetchResult(FetchStatus.API_ERROR, message=str(exc))
                 if attempt >= retry_total:
                     logging.warning(f"Tushare {description} 频率超限，重试耗尽：{exc}")
-                    return None
+                    return FetchResult(FetchStatus.RATE_LIMIT, message=str(exc))
                 logging.warning(
                     f"Tushare {description} 频率超限，等待 {sleep_seconds}s 后重试 "
                     f"({attempt + 1}/{retry_total})：{exc}"
                 )
                 time.sleep(sleep_seconds)
-        return None
+        return FetchResult(FetchStatus.RATE_LIMIT, message="重试耗尽")
 
     @staticmethod
     def _read_token():
@@ -102,13 +115,14 @@ class TushareProvider:
     def _get_stock_names(self):
         if hasattr(self, '_stock_names_cache'):
             return self._stock_names_cache
-        basic = self._call_with_retry(
+        result = self._call_with_retry(
             'stock_basic',
             'stock_basic(name)',
             lambda: self.pro.stock_basic(exchange='', list_status='L', fields='ts_code,name')
         )
         try:
-            if basic is not None and not basic.empty:
+            if result.is_success and result.data is not None and not result.data.empty:
+                basic = result.data
                 basic['code'] = basic['ts_code'].apply(self.from_ts_code)
                 self._stock_names_cache = dict(zip(basic['code'], basic['name']))
             else:
@@ -120,24 +134,31 @@ class TushareProvider:
     # ---- 股票实时行情 ----
     def fetch_stock_spot(self, date):
         date_str = date.strftime('%Y%m%d')
-        daily = self._call_with_retry(
+        daily_result = self._call_with_retry(
             'daily',
             f'daily({date_str})',
             lambda: self.pro.daily(trade_date=date_str)
         )
-        if daily is None or daily.empty:
-            return None
+        if not daily_result.is_success:
+            return daily_result
 
-        basic = self._call_with_retry(
+        daily = daily_result.data
+        if daily is None or daily.empty:
+            return FetchResult(FetchStatus.EMPTY, message=f"无交易数据：{date}")
+
+        basic_result = self._call_with_retry(
             'daily_basic',
             f'daily_basic({date_str})',
             lambda: self.pro.daily_basic(ts_code='', trade_date=date_str)
         )
 
-        if basic is not None and not basic.empty:
-            df = daily.merge(basic, on=['ts_code', 'trade_date'], how='left', suffixes=('', '_basic'))
+        quality_flag = 'complete'
+        if basic_result.is_success and basic_result.data is not None and not basic_result.data.empty:
+            df = daily.merge(basic_result.data, on=['ts_code', 'trade_date'], how='left', suffixes=('', '_basic'))
         else:
+            logging.warning(f"daily_basic失败，使用默认值：{date}")
             df = daily.copy()
+            quality_flag = 'partial_basic_missing'
 
         names = self._get_stock_names()
 
@@ -207,22 +228,29 @@ class TushareProvider:
         result['listing_date'] = None
 
         result = result.reindex(columns=self.STOCK_SPOT_COLUMNS)
-        return result
+        result['_quality'] = quality_flag
+
+        status = FetchStatus.SUCCESS if quality_flag == 'complete' else FetchStatus.PARTIAL
+        return FetchResult(status, result)
 
     # ---- 个股资金流向 ----
     def fetch_stock_fund_flow(self, indicator='今日', date=None):
         if indicator != '今日':
-            return None
+            return FetchResult(FetchStatus.EMPTY, message=f"不支持的indicator: {indicator}")
         if date is None:
             date = datetime.date.today()
         trade_date = date.strftime('%Y%m%d')
-        mf = self._call_with_retry(
+        mf_result = self._call_with_retry(
             'moneyflow',
             f'moneyflow({trade_date})',
             lambda: self.pro.moneyflow(trade_date=trade_date)
         )
+        if not mf_result.is_success:
+            return mf_result
+
+        mf = mf_result.data
         if mf is None or mf.empty:
-            return None
+            return FetchResult(FetchStatus.EMPTY, message=f"无资金流向数据：{date}")
 
         mf['buy_elg_amount'] = pd.to_numeric(mf.get('buy_elg_amount', 0), errors='coerce').fillna(0)
         mf['sell_elg_amount'] = pd.to_numeric(mf.get('sell_elg_amount', 0), errors='coerce').fillna(0)
@@ -257,19 +285,23 @@ class TushareProvider:
         result['今日中单净流入-净占比'] = 0.0
         result['今日小单净流入-净额'] = ((mf['buy_sm_amount'] - mf['sell_sm_amount']) * 10000).astype('int64')
         result['今日小单净流入-净占比'] = 0.0
-        return result
+        return FetchResult(FetchStatus.SUCCESS, result)
 
     # ---- 股票历史行情（单股）----
     def fetch_stock_hist(self, code, start_date, end_date,
                          period='daily', adjust='qfq'):
         ts_code = self.to_ts_code(code)
-        df = self._call_with_retry(
+        result = self._call_with_retry(
             'daily',
             f'daily({code})',
             lambda: self.pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
         )
+        if not result.is_success:
+            return result
+
+        df = result.data
         if df is None or df.empty:
-            return None
+            return FetchResult(FetchStatus.EMPTY, message=f"无历史数据：{code}")
 
         df['trade_date'] = pd.to_datetime(df['trade_date'])
 
@@ -291,7 +323,7 @@ class TushareProvider:
         result['涨跌额'] = pd.to_numeric(df['change'], errors='coerce')
         result['换手率'] = 0.0
         result = result.sort_values('日期').reset_index(drop=True)
-        return result
+        return FetchResult(FetchStatus.SUCCESS, result)
 
     # ---- 批量填充历史缓存 ----
     def fill_hist_cache(self, start_date, end_date, adjust='qfq'):
@@ -333,14 +365,14 @@ class TushareProvider:
         return count
 
     def _get_all_codes(self):
-        basic = self._call_with_retry(
+        result = self._call_with_retry(
             'stock_basic',
             'stock_basic(codes)',
             lambda: self.pro.stock_basic(exchange='', list_status='L', fields='ts_code')
         )
         try:
-            if basic is not None and not basic.empty:
-                return sorted(basic['ts_code'].apply(self.from_ts_code).tolist())
+            if result.is_success and result.data is not None and not result.data.empty:
+                return sorted(result.data['ts_code'].apply(self.from_ts_code).tolist())
         except Exception:
             pass
         return []

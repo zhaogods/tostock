@@ -18,3 +18,8 @@ class singleton_type(type):
                 cls._instance = super(singleton_type, cls).__call__(*args, **kwargs)  # 创建cls的对象
 
         return cls._instance
+
+    def reset_instance(cls):
+        with singleton_type.single_lock:
+            if hasattr(cls, "_instance"):
+                delattr(cls, "_instance")

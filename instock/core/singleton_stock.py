@@ -33,6 +33,7 @@ def _fallback_stock_list():
 # 读取当天股票数据
 class stock_data(metaclass=singleton_type):
     def __init__(self, date):
+        self.date = date
         try:
             self.data = stf.fetch_stocks(date)
         except Exception as e:
@@ -48,6 +49,7 @@ class stock_data(metaclass=singleton_type):
 # 读取股票历史数据
 class stock_hist_data(metaclass=singleton_type):
     def __init__(self, date=None, stocks=None, workers=None):
+        self.date = date
         if workers is None:
             workers = config.get_stock_workers(4)
         if stocks is None:

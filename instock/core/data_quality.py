@@ -67,6 +67,19 @@ def validate_dataframe(table_name, data):
             results.append(_result(f'{column}_not_null', 'warning', False, null_count,
                                    f'{column} 空值数：{null_count}'))
 
+    if '_quality' in data.columns:
+        partial_count = int((data['_quality'] == 'partial_basic_missing').sum())
+        if partial_count > 0:
+            results.append(_result('data_quality_flag', 'warning', False, partial_count,
+                                 f'{partial_count}行数据缺少basic字段'))
+
+    critical_zero_fields = {'turnoverrate', 'pe', 'pb'}
+    for col in critical_zero_fields & set(data.columns):
+        zero_count = int((data[col] == 0).sum())
+        if zero_count > len(data) * 0.8:
+            results.append(_result(f'{col}_mostly_zero', 'error', False, zero_count,
+                                 f'{col}字段{zero_count}行为0，疑似数据源问题'))
+
     return results
 
 

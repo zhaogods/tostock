@@ -23,6 +23,13 @@ __date__ = '2023/3/10 '
 
 
 def prepare(date, strategy):
+    # 重置单例避免日期混乱
+    from instock.core.singleton_stock import stock_data, stock_hist_data
+    from instock.core.singleton_trade_date import stock_trade_date
+    stock_data.reset_instance()
+    stock_hist_data.reset_instance()
+    stock_trade_date.reset_instance()
+
     try:
         stocks_data = stock_hist_data(date=date).get_data()
         if stocks_data is None:

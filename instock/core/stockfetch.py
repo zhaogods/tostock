@@ -21,6 +21,7 @@ import instock.core.crawling.stock_fhps_em as sfe
 import instock.core.crawling.stock_chip_race as scr
 import instock.core.crawling.stock_limitup_reason as slr
 from instock.core.tushare_provider import TushareProvider
+from instock.lib.fetch_result import FetchResult, FetchStatus
 
 try:
     ts_provider = TushareProvider()
@@ -100,7 +101,18 @@ def fetch_etfs(date):
 def fetch_stocks(date):
     try:
         if ts_provider is not None:
-            data = ts_provider.fetch_stock_spot(date)
+            result = ts_provider.fetch_stock_spot(date)
+            if isinstance(result, FetchResult):
+                if result.is_success or result.status == FetchStatus.PARTIAL:
+                    data = result.data
+                elif result.status in (FetchStatus.API_ERROR, FetchStatus.NETWORK_ERROR):
+                    logging.warning(f"Tushare失败({result.status})，降级Eastmoney: {result.message}")
+                    data = she.stock_zh_a_spot_em()
+                else:
+                    logging.info(f"Tushare返回空数据: {result.message}")
+                    return None
+            else:
+                data = result
         else:
             data = she.stock_zh_a_spot_em()
         if data is None or len(data.index) == 0:
@@ -140,7 +152,15 @@ def fetch_stocks_fund_flow(index, date=None):
     try:
         cn_flow = tbs.CN_STOCK_FUND_FLOW[index]
         if ts_provider is not None and cn_flow['cn'] == '今日':
-            data = ts_provider.fetch_stock_fund_flow(indicator='今日', date=date)
+            result = ts_provider.fetch_stock_fund_flow(indicator='今日', date=date)
+            if isinstance(result, FetchResult):
+                if not result.is_success:
+                    logging.warning(f"Tushare资金流向失败，降级: {result.message}")
+                    data = sff.stock_individual_fund_flow_rank(indicator=cn_flow['cn'])
+                else:
+                    data = result.data
+            else:
+                data = result
         else:
             data = sff.stock_individual_fund_flow_rank(indicator=cn_flow['cn'])
         if data is None or len(data.index) == 0:
@@ -413,8 +433,20 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
         else:
             if ts_provider is not None:
                 end_d = date_end if date_end else datetime.date.today().strftime('%Y%m%d')
-                stock = ts_provider.fetch_stock_hist(
+                result = ts_provider.fetch_stock_hist(
                     code=code, start_date=date_start, end_date=end_d, adjust=adjust)
+                if isinstance(result, FetchResult):
+                    if result.should_retry:
+                        logging.warning(f"Tushare临时失败，降级Eastmoney: {code}")
+                        stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start,
+                                                    end_date=date_end, adjust=adjust) if date_end else \
+                                she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+                    elif result.is_success:
+                        stock = result.data
+                    else:
+                        return None
+                else:
+                    stock = result
             elif date_end is not None:
                 stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, end_date=date_end,
                                             adjust=adjust)
@@ -429,7 +461,14 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
                 if is_cache:
                     stock.to_pickle(cache_file, compression="gzip")
             except Exception as e:
-                logging.warning(f"stockfetch.stock_hist_cache写入缓存失败：{code} {e}")
+                logging.error(f"stockfetch.stock_hist_cache写入缓存失败：{code} {e}")
+                try:
+                    from instock.core import data_quality
+                    results = [data_quality._result('cache_write_failed', 'error', False, 1,
+                                                   f'股票{code}缓存写入失败: {e}')]
+                    data_quality.record_quality_results('stock_hist_cache', results)
+                except Exception:
+                    pass
             return stock
     except Exception as e:
         logging.error(f"stockfetch.stock_hist_cache处理异常：{code}代码{e}")

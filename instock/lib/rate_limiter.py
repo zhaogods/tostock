@@ -11,8 +11,17 @@ from pathlib import Path
 from instock.lib import config
 
 try:
+    import portalocker
+    HAS_FILE_LOCK = True
+except ImportError:
+    portalocker = None
+    HAS_FILE_LOCK = False
+    import logging
+    logging.warning("portalocker未安装，跨进程速率限制可能不可靠")
+
+try:
     import fcntl
-except ImportError:  # pragma: no cover - Docker/Linux 环境会有 fcntl
+except ImportError:
     fcntl = None
 
 _process_lock = threading.Lock()
@@ -53,7 +62,9 @@ class FileRateLimiter:
     def _reserve_slot(self, key, interval, now):
         with self._thread_lock:
             with self.lock_path.open('a+', encoding='utf-8') as lock_file:
-                if fcntl is not None:
+                if HAS_FILE_LOCK:
+                    portalocker.lock(lock_file, portalocker.LOCK_EX)
+                elif fcntl is not None:
                     fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
                 try:
                     state = self._load_state()
@@ -63,7 +74,9 @@ class FileRateLimiter:
                     self._save_state(state)
                     return scheduled_at
                 finally:
-                    if fcntl is not None:
+                    if HAS_FILE_LOCK:
+                        portalocker.unlock(lock_file)
+                    elif fcntl is not None:
                         fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _load_state(self):

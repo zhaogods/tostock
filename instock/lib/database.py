@@ -127,6 +127,14 @@ def insert_db_from_df(data, table_name, cols_type, write_index, primary_keys, in
 
 # 增加一个插入到其他数据库的方法。
 def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, primary_keys, indexs=None):
+    if data is None or len(data.index) == 0:
+        logging.warning(f"database.insert: 拒绝写入空DataFrame到 {table_name}")
+        return
+
+    # 移除质量标记列（仅用于内部传递，不写入数据库）
+    if '_quality' in data.columns:
+        data = data.drop(columns=['_quality'])
+
     # 定义engine
     if to_db is None:
         engine_mysql = engine()

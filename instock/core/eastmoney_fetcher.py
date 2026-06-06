@@ -22,6 +22,7 @@ _POOL_MAXSIZE = int(os.environ.get('HTTP_POOL_MAXSIZE', '50'))
 _RETRY_SLEEP_MIN = float(os.environ.get('HTTP_RETRY_SLEEP_MIN', '1'))
 _RETRY_SLEEP_MAX = float(os.environ.get('HTTP_RETRY_SLEEP_MAX', '3'))
 _MIN_REQUEST_INTERVAL = float(os.environ.get('HTTP_MIN_INTERVAL', '1.0'))
+_MAX_CONTINUOUS_FAILURES = int(os.environ.get('HTTP_MAX_CONTINUOUS_FAILURES', '5'))
 
 class eastmoney_fetcher:
     """
@@ -35,6 +36,7 @@ class eastmoney_fetcher:
         self.session = self._create_session()
         self.has_cookie = self._get_cookie() is not None
         self._last_request_time = 0
+        self._continuous_failures = 0
 
     def _rate_limit(self):
         """确保请求间隔不小于 _MIN_REQUEST_INTERVAL 秒"""
@@ -106,6 +108,9 @@ class eastmoney_fetcher:
         :param timeout: 超时时间
         :return: 响应对象
         """
+        if self._continuous_failures >= _MAX_CONTINUOUS_FAILURES:
+            raise RuntimeError(f"连续失败{self._continuous_failures}次，跳过后续请求")
+
         self._rate_limit()
         for i in range(retry):
             if self.has_cookie:
@@ -122,15 +127,17 @@ class eastmoney_fetcher:
                 response.raise_for_status()
                 if not self.has_cookie:
                     proxys().mark_ok()
+                self._continuous_failures = 0
                 return response
             except requests.exceptions.RequestException as e:
+                self._continuous_failures += 1
                 # 502 是网站问题，不是代理问题
                 if hasattr(e, 'response') and e.response is not None and e.response.status_code == 502:
-                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试")
+                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
                 else:
                     if not self.has_cookie:
                         proxys().mark_failed(proxies)
-                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
+                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
 
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
@@ -148,6 +155,9 @@ class eastmoney_fetcher:
         :param timeout: 超时时间
         :return: 响应对象
         """
+        if self._continuous_failures >= _MAX_CONTINUOUS_FAILURES:
+            raise RuntimeError(f"连续失败{self._continuous_failures}次，跳过后续请求")
+
         self._rate_limit()
         for i in range(retry):
             if self.has_cookie:
@@ -166,15 +176,17 @@ class eastmoney_fetcher:
                 response.raise_for_status()
                 if not self.has_cookie:
                     proxys().mark_ok()
+                self._continuous_failures = 0
                 return response
             except requests.exceptions.RequestException as e:
+                self._continuous_failures += 1
                 # 502 是网站问题，不是代理问题
                 if hasattr(e, 'response') and e.response is not None and e.response.status_code == 502:
-                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试")
+                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
                 else:
                     if not self.has_cookie:
                         proxys().mark_failed(proxies)
-                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试")
+                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
 
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
