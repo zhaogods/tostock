@@ -28,11 +28,13 @@ services:
       - TUSHARE_DAILY_BASIC_RATE=${TUSHARE_DAILY_BASIC_RATE:-150}
       - TUSHARE_MONEYFLOW_RATE=${TUSHARE_MONEYFLOW_RATE:-150}
       - TUSHARE_STOCK_BASIC_RATE=${TUSHARE_STOCK_BASIC_RATE:-40}
+      - TUSHARE_FINA_INDICATOR_RATE=${TUSHARE_FINA_INDICATOR_RATE:-160}
       - TUSHARE_RATE_LIMIT=${TUSHARE_RATE_LIMIT:-180}
     volumes:
       - ./data/instockproxy.txt:/data/tostock/instock/config/proxy.txt
       - ./data/eastmoneycookie.txt:/data/tostock/instock/config/eastmoney_cookie.txt
       - ./data/cache/hist:/data/tostock/instock/cache/hist
+      - ./data/cache/fina:/data/tostock/instock/cache/fina
       - ./docker/docker-entrypoint.sh:/docker-entrypoint.sh:ro
     entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
     depends_on:

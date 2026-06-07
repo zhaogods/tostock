@@ -20,6 +20,7 @@ class TushareProvider:
         'daily_basic': 'TUSHARE_DAILY_BASIC_RATE',
         'moneyflow': 'TUSHARE_MONEYFLOW_RATE',
         'stock_basic': 'TUSHARE_STOCK_BASIC_RATE',
+        'fina_indicator': 'TUSHARE_FINA_INDICATOR_RATE',
     }
 
     STOCK_SPOT_COLUMNS = (
@@ -131,6 +132,95 @@ class TushareProvider:
             self._stock_names_cache = {}
         return self._stock_names_cache
 
+    def _get_stock_info(self):
+        """获取股票基本信息（扩展版）"""
+        if hasattr(self, '_stock_info_cache'):
+            return self._stock_info_cache
+        result = self._call_with_retry(
+            'stock_basic',
+            'stock_basic(extended)',
+            lambda: self.pro.stock_basic(exchange='', list_status='L', fields='ts_code,name,industry,list_date')
+        )
+        try:
+            if result.is_success and result.data is not None and not result.data.empty:
+                df = result.data
+                df['code'] = df['ts_code'].apply(self.from_ts_code)
+                self._stock_info_cache = df.set_index('code')[['name', 'industry', 'list_date']].to_dict('index')
+            else:
+                self._stock_info_cache = {}
+        except Exception:
+            self._stock_info_cache = {}
+        return self._stock_info_cache
+
+    @staticmethod
+    def _get_latest_report_period(date):
+        """获取指定日期对应的最近报告期"""
+        year = date.year
+        month = date.month
+        if month <= 3:
+            return f"{year-1}1231"
+        elif month <= 6:
+            return f"{year}0331"
+        elif month <= 9:
+            return f"{year}0630"
+        else:
+            return f"{year}0930"
+
+    def _fetch_fina_indicator_batch(self, period):
+        """批量获取财务指标（按报告期）"""
+        result = self._call_with_retry(
+            'fina_indicator',
+            f'fina_indicator({period})',
+            lambda: self.pro.fina_indicator(period=period)
+        )
+        if not result.is_success or result.data is None or result.data.empty:
+            return None
+
+        df = result.data
+        df['code'] = df['ts_code'].apply(self.from_ts_code)
+
+        field_mapping = {
+            'eps': 'basic_eps',
+            'bps': 'bvps',
+            'capital_rese_ps': 'per_capital_reserve',
+            'undist_profit_ps': 'per_unassign_profit',
+            'roe_waa': 'roe_weight',
+            'grossprofit_margin': 'sale_gpr',
+            'debt_to_assets': 'debt_asset_ratio',
+            'or_yoy': 'toi_yoy_ratio',
+        }
+
+        result_df = pd.DataFrame()
+        result_df['code'] = df['code']
+        for ts_field, proj_field in field_mapping.items():
+            result_df[proj_field] = pd.to_numeric(df.get(ts_field, 0), errors='coerce').fillna(0.0)
+
+        return result_df
+
+    def get_fina_indicator_cached(self, date):
+        """获取财务指标（带缓存）"""
+        import os
+
+        period = self._get_latest_report_period(date)
+        cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cache', 'fina', period[:4])
+        cache_file = os.path.join(cache_dir, f"fina_{period}.pkl")
+
+        if os.path.exists(cache_file):
+            try:
+                return pd.read_pickle(cache_file)
+            except Exception as e:
+                logging.warning(f"财务缓存读取失败: {e}")
+
+        df = self._fetch_fina_indicator_batch(period)
+        if df is not None and not df.empty:
+            try:
+                os.makedirs(cache_dir, exist_ok=True)
+                df.to_pickle(cache_file)
+            except Exception as e:
+                logging.warning(f"财务缓存写入失败: {e}")
+
+        return df
+
     # ---- 股票实时行情 ----
     def fetch_stock_spot(self, date):
         date_str = date.strftime('%Y%m%d')
@@ -206,15 +296,27 @@ class TushareProvider:
         result['pe'] = self._safe_numeric(df, 'pe')
         result['pbnewmrq'] = self._safe_numeric(df, 'pb')
 
-        result['basic_eps'] = 0.0
-        result['bvps'] = 0.0
-        result['per_capital_reserve'] = 0.0
-        result['per_unassign_profit'] = 0.0
-        result['roe_weight'] = 0.0
-        result['sale_gpr'] = 0.0
-        result['debt_asset_ratio'] = 0.0
+        # 补充财务指标
+        try:
+            fina_df = self.get_fina_indicator_cached(date)
+            if fina_df is not None and not fina_df.empty:
+                result = result.merge(fina_df, on='code', how='left')
+                for field in ['basic_eps', 'bvps', 'per_capital_reserve',
+                              'per_unassign_profit', 'roe_weight', 'sale_gpr',
+                              'debt_asset_ratio', 'toi_yoy_ratio']:
+                    if field in result.columns:
+                        result[field] = result[field].fillna(0.0)
+        except Exception as e:
+            logging.warning(f"财务指标获取失败，使用默认值: {e}")
+
+        # 确保财务字段存在
+        for field in ['basic_eps', 'bvps', 'per_capital_reserve',
+                      'per_unassign_profit', 'roe_weight', 'sale_gpr',
+                      'debt_asset_ratio', 'toi_yoy_ratio']:
+            if field not in result.columns:
+                result[field] = 0.0
+
         result['total_operate_income'] = 0
-        result['toi_yoy_ratio'] = 0.0
         result['parent_netprofit'] = 0
         result['netprofit_yoy_ratio'] = 0.0
         result['report_date'] = None
@@ -224,8 +326,10 @@ class TushareProvider:
         result['total_market_cap'] = self._safe_numeric(df, 'total_mv', 0) * 10000
         result['free_cap'] = self._safe_numeric(df, 'circ_mv', 0) * 10000
 
-        result['industry'] = ''
-        result['listing_date'] = None
+        # 补充基础信息
+        stock_info = self._get_stock_info()
+        result['industry'] = result['code'].map(lambda c: stock_info.get(c, {}).get('industry', ''))
+        result['listing_date'] = result['code'].map(lambda c: stock_info.get(c, {}).get('list_date', None))
 
         result = result.reindex(columns=self.STOCK_SPOT_COLUMNS)
         result['_quality'] = quality_flag
