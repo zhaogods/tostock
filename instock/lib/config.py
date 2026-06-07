@@ -116,6 +116,7 @@ def get_tushare_rate_limits():
         'daily_basic': ('TUSHARE_DAILY_BASIC_RATE', 150),
         'moneyflow': ('TUSHARE_MONEYFLOW_RATE', 150),
         'stock_basic': ('TUSHARE_STOCK_BASIC_RATE', 40),
+        'fina_indicator': ('TUSHARE_FINA_INDICATOR_RATE', 160),
     }
     rates = {}
     for api_name, (env_name, default) in env_names.items():
