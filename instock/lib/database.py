@@ -131,10 +131,6 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
         logging.warning(f"database.insert: 拒绝写入空DataFrame到 {table_name}")
         return
 
-    # 移除质量标记列（仅用于内部传递，不写入数据库）
-    if '_quality' in data.columns:
-        data = data.drop(columns=['_quality'])
-
     # 定义engine
     if to_db is None:
         engine_mysql = engine()
@@ -149,8 +145,28 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
         # 插入到第一个位置：
         col_name_list.insert(0, data.index.name)
     data = _sanitize_dataframe_for_db(data)
+
+    # 先记录数据质量（此时_quality列还在）
     if to_db is None:
         _record_data_quality(table_name, data)
+
+    # 移除质量标记列（仅用于内部传递，不写入数据库）
+    if '_quality' in data.columns:
+        data = data.drop(columns=['_quality'])
+        if '_quality' in col_name_list:
+            col_name_list.remove('_quality')
+
+    # 覆盖模式：插入前先删除该日期的旧数据，避免主键冲突
+    if 'date' in data.columns and len(data.index) > 0:
+        try:
+            dates = data['date'].unique()
+            if len(dates) == 1:
+                date_value = dates[0]
+                executeSql(f'DELETE FROM `{table_name}` WHERE date = %s', (date_value,))
+                logging.info(f"database.insert: 已删除{table_name}表中日期{date_value}的旧数据")
+        except Exception as e:
+            logging.warning(f"database.insert: 删除{table_name}旧数据失败（可能表不存在）：{e}")
+
     try:
         if cols_type is None:
             data.to_sql(name=table_name, con=engine_mysql, schema=to_db, if_exists='append',

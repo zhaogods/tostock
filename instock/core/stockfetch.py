@@ -22,6 +22,7 @@ import instock.core.crawling.stock_chip_race as scr
 import instock.core.crawling.stock_limitup_reason as slr
 from instock.core.tushare_provider import TushareProvider
 from instock.lib.fetch_result import FetchResult, FetchStatus
+from instock.core.eastmoney_fetcher import is_circuit_broken
 
 try:
     ts_provider = TushareProvider()
@@ -81,6 +82,9 @@ def fetch_stocks_trade_date():
 
 # 读取当天股票数据
 def fetch_etfs(date):
+    if is_circuit_broken():
+        logging.error("熔断器已触发，跳过ETF数据获取")
+        return None
     try:
         data = fee.fund_etf_spot_em()
         if data is None or len(data.index) == 0:
@@ -106,6 +110,9 @@ def fetch_stocks(date):
                 if result.is_success or result.status == FetchStatus.PARTIAL:
                     data = result.data
                 elif result.status in (FetchStatus.API_ERROR, FetchStatus.NETWORK_ERROR):
+                    if is_circuit_broken():
+                        logging.error("熔断器已触发，跳过Eastmoney降级")
+                        return None
                     logging.warning(f"Tushare失败({result.status})，降级Eastmoney: {result.message}")
                     data = she.stock_zh_a_spot_em()
                 else:
@@ -114,9 +121,19 @@ def fetch_stocks(date):
             else:
                 data = result
         else:
+            if is_circuit_broken():
+                logging.error("熔断器已触发，跳过股票数据获取")
+                return None
             data = she.stock_zh_a_spot_em()
         if data is None or len(data.index) == 0:
             return None
+
+        # 保存质量标记列（如果存在）
+        quality = None
+        if '_quality' in data.columns:
+            quality = data['_quality'].copy()
+            data = data.drop(columns=['_quality'])
+
         if ts_provider is None:
             if date is None:
                 data.insert(0, 'date', datetime.datetime.now().strftime("%Y-%m-%d"))
@@ -126,7 +143,13 @@ def fetch_stocks(date):
             if not isinstance(data['date'].iloc[0], str):
                 data['date'] = data['date'].apply(
                     lambda d: d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d))
+
         data.columns = list(tbs.TABLE_CN_STOCK_SPOT['columns'])
+
+        # 恢复质量标记列
+        if quality is not None:
+            data['_quality'] = quality.values
+
         data = data.loc[data['code'].apply(is_a_stock)].loc[data['new_price'].apply(is_open)]
         return data
     except Exception as e:
@@ -135,6 +158,9 @@ def fetch_stocks(date):
 
 
 def fetch_stock_selection():
+    if is_circuit_broken():
+        logging.error("熔断器已触发，跳过选股器数据获取")
+        return None
     try:
         data = sst.stock_selection()
         if data is None or len(data.index) == 0:
@@ -155,6 +181,9 @@ def fetch_stocks_fund_flow(index, date=None):
             result = ts_provider.fetch_stock_fund_flow(indicator='今日', date=date)
             if isinstance(result, FetchResult):
                 if not result.is_success:
+                    if is_circuit_broken():
+                        logging.error("熔断器已触发，跳过Eastmoney降级")
+                        return None
                     logging.warning(f"Tushare资金流向失败，降级: {result.message}")
                     data = sff.stock_individual_fund_flow_rank(indicator=cn_flow['cn'])
                 else:
@@ -162,6 +191,9 @@ def fetch_stocks_fund_flow(index, date=None):
             else:
                 data = result
         else:
+            if is_circuit_broken():
+                logging.error("熔断器已触发，跳过资金流向数据获取")
+                return None
             data = sff.stock_individual_fund_flow_rank(indicator=cn_flow['cn'])
         if data is None or len(data.index) == 0:
             return None
@@ -437,6 +469,9 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
                     code=code, start_date=date_start, end_date=end_d, adjust=adjust)
                 if isinstance(result, FetchResult):
                     if result.should_retry:
+                        if is_circuit_broken():
+                            logging.error(f"熔断器已触发，跳过{code}历史数据获取")
+                            return None
                         logging.warning(f"Tushare临时失败，降级Eastmoney: {code}")
                         stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start,
                                                     end_date=date_end, adjust=adjust) if date_end else \
@@ -448,9 +483,15 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
                 else:
                     stock = result
             elif date_end is not None:
+                if is_circuit_broken():
+                    logging.error(f"熔断器已触发，跳过{code}历史数据获取")
+                    return None
                 stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, end_date=date_end,
                                             adjust=adjust)
             else:
+                if is_circuit_broken():
+                    logging.error(f"熔断器已触发，跳过{code}历史数据获取")
+                    return None
                 stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, adjust=adjust)
 
             if stock is None or len(stock.index) == 0:

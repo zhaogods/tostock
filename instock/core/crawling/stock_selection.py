@@ -6,7 +6,7 @@ import random
 import time
 import pandas as pd
 import instock.core.tablestructure as tbs
-from instock.core.eastmoney_fetcher import eastmoney_fetcher
+from instock.core.eastmoney_fetcher import eastmoney_fetcher, is_circuit_broken
 
 __author__ = 'myh '
 __date__ = '2025/12/31 '
@@ -21,6 +21,10 @@ def stock_selection() -> pd.DataFrame:
     :return: 选股器
     :rtype: pandas.DataFrame
     """
+    if is_circuit_broken():
+        print("熔断器已触发，跳过选股器数据获取")
+        return pd.DataFrame()
+
     cols = tbs.TABLE_CN_STOCK_SELECTION['columns']
     page_size = 50
     page_current = 1
@@ -46,6 +50,9 @@ def stock_selection() -> pd.DataFrame:
     data_count = data_json["result"]["count"]
     page_count = math.ceil(data_count/page_size)
     while page_count > 1:
+        if is_circuit_broken():
+            print("熔断器已触发，停止选股器分页获取")
+            break
         # 添加随机延迟，避免爬取过快
         time.sleep(random.uniform(2, 3))
         page_current = page_current + 1

@@ -10,6 +10,7 @@ import sys
 import time
 import instock.lib.trade_time as trd
 from instock.lib import config
+from instock.core.eastmoney_fetcher import reset_circuit
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
@@ -23,6 +24,7 @@ def _parse_date(value):
 
 
 def _invoke_run_fun(run_fun, run_date, *args):
+    reset_circuit()
     if run_fun.__name__.startswith('save_nph'):
         return run_fun(run_date, False, *args)
     return run_fun(run_date, *args)

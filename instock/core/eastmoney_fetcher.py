@@ -24,6 +24,20 @@ _RETRY_SLEEP_MAX = float(os.environ.get('HTTP_RETRY_SLEEP_MAX', '3'))
 _MIN_REQUEST_INTERVAL = float(os.environ.get('HTTP_MIN_INTERVAL', '1.0'))
 _MAX_CONTINUOUS_FAILURES = int(os.environ.get('HTTP_MAX_CONTINUOUS_FAILURES', '5'))
 
+# 全局熔断器状态（所有实例共享）
+_CIRCUIT_BROKEN = False
+_CIRCUIT_FAILURE_COUNT = 0
+
+def is_circuit_broken():
+    """检查熔断器是否已触发"""
+    return _CIRCUIT_BROKEN
+
+def reset_circuit():
+    """重置熔断器（用于新的批次任务）"""
+    global _CIRCUIT_BROKEN, _CIRCUIT_FAILURE_COUNT
+    _CIRCUIT_BROKEN = False
+    _CIRCUIT_FAILURE_COUNT = 0
+
 class eastmoney_fetcher:
     """
     东方财富网数据获取器
@@ -36,7 +50,6 @@ class eastmoney_fetcher:
         self.session = self._create_session()
         self.has_cookie = self._get_cookie() is not None
         self._last_request_time = 0
-        self._continuous_failures = 0
 
     def _rate_limit(self):
         """确保请求间隔不小于 _MIN_REQUEST_INTERVAL 秒"""
@@ -67,12 +80,12 @@ class eastmoney_fetcher:
         """创建并配置会话"""
         session = requests.Session()
 
-        # 配置连接池
+        # 配置连接池，禁用自动重试以便熔断器能正确计数
         retry_strategy = Retry(
-            total=_RETRY_TOTAL,
-            backoff_factor=_RETRY_BACKOFF,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+            total=0,  # 禁用自动重试，让熔断器处理
+            backoff_factor=0,
+            status_forcelist=[],
+            allowed_methods=[]
         )
         adapter = HTTPAdapter(
             max_retries=retry_strategy,
@@ -108,8 +121,10 @@ class eastmoney_fetcher:
         :param timeout: 超时时间
         :return: 响应对象
         """
-        if self._continuous_failures >= _MAX_CONTINUOUS_FAILURES:
-            raise RuntimeError(f"连续失败{self._continuous_failures}次，跳过后续请求")
+        global _CIRCUIT_BROKEN, _CIRCUIT_FAILURE_COUNT
+
+        if _CIRCUIT_BROKEN:
+            raise RuntimeError(f"熔断器已触发，累计失败{_CIRCUIT_FAILURE_COUNT}次，跳过所有请求")
 
         self._rate_limit()
         for i in range(retry):
@@ -127,17 +142,21 @@ class eastmoney_fetcher:
                 response.raise_for_status()
                 if not self.has_cookie:
                     proxys().mark_ok()
-                self._continuous_failures = 0
+                _CIRCUIT_FAILURE_COUNT = 0
                 return response
             except requests.exceptions.RequestException as e:
-                self._continuous_failures += 1
+                _CIRCUIT_FAILURE_COUNT += 1
                 # 502 是网站问题，不是代理问题
                 if hasattr(e, 'response') and e.response is not None and e.response.status_code == 502:
-                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
+                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试, 全局累计失败{_CIRCUIT_FAILURE_COUNT}次")
                 else:
                     if not self.has_cookie:
                         proxys().mark_failed(proxies)
-                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
+                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试, 全局累计失败{_CIRCUIT_FAILURE_COUNT}次")
+
+                if _CIRCUIT_FAILURE_COUNT >= _MAX_CONTINUOUS_FAILURES:
+                    _CIRCUIT_BROKEN = True
+                    raise RuntimeError(f"连续失败{_CIRCUIT_FAILURE_COUNT}次，触发熔断器")
 
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
@@ -155,8 +174,10 @@ class eastmoney_fetcher:
         :param timeout: 超时时间
         :return: 响应对象
         """
-        if self._continuous_failures >= _MAX_CONTINUOUS_FAILURES:
-            raise RuntimeError(f"连续失败{self._continuous_failures}次，跳过后续请求")
+        global _CIRCUIT_BROKEN, _CIRCUIT_FAILURE_COUNT
+
+        if _CIRCUIT_BROKEN:
+            raise RuntimeError(f"熔断器已触发，累计失败{_CIRCUIT_FAILURE_COUNT}次，跳过所有请求")
 
         self._rate_limit()
         for i in range(retry):
@@ -176,17 +197,21 @@ class eastmoney_fetcher:
                 response.raise_for_status()
                 if not self.has_cookie:
                     proxys().mark_ok()
-                self._continuous_failures = 0
+                _CIRCUIT_FAILURE_COUNT = 0
                 return response
             except requests.exceptions.RequestException as e:
-                self._continuous_failures += 1
+                _CIRCUIT_FAILURE_COUNT += 1
                 # 502 是网站问题，不是代理问题
                 if hasattr(e, 'response') and e.response is not None and e.response.status_code == 502:
-                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
+                    print(f"东方财富返回 502 (网站问题): {url}, 第 {i + 1}/{retry} 次重试, 全局累计失败{_CIRCUIT_FAILURE_COUNT}次")
                 else:
                     if not self.has_cookie:
                         proxys().mark_failed(proxies)
-                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试, 连续失败{self._continuous_failures}次")
+                    print(f"请求错误: {e}, 第 {i + 1}/{retry} 次重试, 全局累计失败{_CIRCUIT_FAILURE_COUNT}次")
+
+                if _CIRCUIT_FAILURE_COUNT >= _MAX_CONTINUOUS_FAILURES:
+                    _CIRCUIT_BROKEN = True
+                    raise RuntimeError(f"连续失败{_CIRCUIT_FAILURE_COUNT}次，触发熔断器")
 
                 if i < retry - 1:
                     time.sleep(random.uniform(_RETRY_SLEEP_MIN, _RETRY_SLEEP_MAX))
