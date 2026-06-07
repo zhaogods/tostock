@@ -397,12 +397,128 @@
         font-size: 12px;
     }
 
+    /* 数据健康度面板 */
+    .data-health-section {
+        margin: 20px 0;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 14px;
+        color: var(--console-ink);
+    }
+
+    .asset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 14px;
+    }
+
+    .asset-card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 14px;
+        border: 2px solid #e5e7eb;
+        transition: all 0.2s;
+    }
+
+    .asset-card.healthy { border-color: var(--console-green); }
+    .asset-card.warning { border-color: var(--console-orange); }
+    .asset-card.critical { border-color: var(--console-red); }
+
+    .asset-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .asset-icon { font-size: 18px; }
+
+    .asset-header h4 {
+        flex: 1;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .asset-status-badge {
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .progress-bar {
+        height: 6px;
+        background: #e5e7eb;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--console-green), var(--console-blue));
+        transition: width 0.3s;
+    }
+
+    .asset-metrics {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 8px;
+    }
+
+    .completeness {
+        font-weight: 700;
+        color: var(--console-green);
+    }
+
+    .asset-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--console-muted);
+    }
+
+    .btn-detail {
+        padding: 3px 10px;
+        background: var(--console-blue);
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+    }
+
+    .asset-issues {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .issue-item {
+        padding: 4px 8px;
+        background: #fef2f2;
+        color: var(--console-red);
+        border-radius: 4px;
+        font-size: 11px;
+        margin-bottom: 4px;
+    }
+
     @media (max-width: 991px) {
         .metric-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
         .console-toolbar { text-align: left; margin-top: 16px; }
         .timeline-item { grid-template-columns: 1fr; }
     }
 </style>
+
+<!-- Alpine.js for reactive components -->
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
 <div class="console-page">
     <div class="console-hero">
@@ -427,6 +543,57 @@
         <div class="metric-card green"><span class="metric-label">今日成功</span><span class="metric-number" id="successCount">0</span></div>
         <div class="metric-card red"><span class="metric-label">今日失败/停止</span><span class="metric-number" id="problemCount">0</span></div>
         <div class="metric-card slate"><span class="metric-label">待处理通知</span><span class="metric-number" id="noticeCount">0</span></div>
+    </div>
+
+    <!-- 数据健康度面板 -->
+    <div class="data-health-section" x-data="dataHealthPanel()" x-init="init()">
+        <h3 class="section-title">📊 数据健康度</h3>
+
+        <div class="asset-grid">
+            <template x-for="asset in assets" :key="asset.key">
+                <div class="asset-card"
+                     :class="{'healthy': asset.completeness > 0.95,
+                              'warning': asset.completeness > 0.80 && asset.completeness <= 0.95,
+                              'critical': asset.completeness <= 0.80}">
+
+                    <div class="asset-header">
+                        <span class="asset-icon" x-text="getSourceIcon(asset.source)"></span>
+                        <h4 x-text="asset.name"></h4>
+                        <span class="asset-status-badge" x-text="getStatusText(asset.status)"></span>
+                    </div>
+
+                    <div class="asset-body">
+                        <div class="progress-bar">
+                            <div class="progress-fill"
+                                 :style="`width: ${asset.completeness * 100}%`"></div>
+                        </div>
+
+                        <div class="asset-metrics">
+                            <span class="metric">
+                                <strong x-text="asset.actual"></strong> /
+                                <span x-text="asset.expected"></span>
+                            </span>
+                            <span class="completeness"
+                                  x-text="`${(asset.completeness * 100).toFixed(1)}%`"></span>
+                        </div>
+
+                        <div class="asset-footer">
+                            <span class="last-update" x-text="asset.last_update || '未更新'"></span>
+                        </div>
+                    </div>
+
+                    <div class="asset-issues" x-show="asset.issues && asset.issues.length > 0">
+                        <template x-for="issue in asset.issues" :key="issue">
+                            <div class="issue-item" x-text="issue"></div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <div x-show="loading" style="text-align: center; padding: 20px; color: #999;">
+            加载中...
+        </div>
     </div>
 
     <div class="date-panel">
@@ -874,5 +1041,53 @@
         loadConsoleStatus();
         setInterval(loadConsoleStatus, 10000);
     });
+
+    // 数据健康度面板 Alpine.js 组件
+    function dataHealthPanel() {
+        return {
+            assets: [],
+            loading: true,
+            selectedDate: new Date().toISOString().split('T')[0],
+
+            init() {
+                this.loadAssets();
+                setInterval(() => this.loadAssets(), 30000);
+            },
+
+            async loadAssets() {
+                try {
+                    const resp = await fetch(`/api/data-assets/status?date=${this.selectedDate}`);
+                    const data = await resp.json();
+                    if (data.ok) {
+                        this.assets = data.assets;
+                    }
+                } catch (e) {
+                    console.error('加载数据资产失败', e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            getSourceIcon(source) {
+                const icons = {
+                    'tushare': '📈',
+                    'eastmoney': '🌐',
+                    'akshare': '📊',
+                    'talib': '🔧',
+                    'cache': '💾'
+                };
+                return icons[source] || '📁';
+            },
+
+            getStatusText(status) {
+                const texts = {
+                    'healthy': '健康',
+                    'warning': '警告',
+                    'critical': '异常'
+                };
+                return texts[status] || '未知';
+            }
+        }
+    }
 </script>
 {% end %}
