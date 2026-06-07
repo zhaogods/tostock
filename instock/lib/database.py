@@ -110,6 +110,25 @@ def _sanitize_dataframe_for_db(data):
         return data
 
 
+def _replace_into_db(data, table_name, col_name_list, write_index):
+    """使用REPLACE INTO语句覆盖重复数据"""
+    conn = get_connection()
+    if conn is None:
+        raise RuntimeError("无法获取数据库连接")
+
+    data = data.astype(object).where(data.notnull(), None)
+    cols = col_name_list if not write_index else [data.index.name] + col_name_list
+    placeholders = ', '.join(['%s'] * len(cols))
+    col_str = ', '.join([f'`{col}`' for col in cols])
+    sql = f'REPLACE INTO `{table_name}` ({col_str}) VALUES ({placeholders})'
+
+    with conn:
+        with conn.cursor() as db:
+            for row in data.itertuples(index=write_index, name=None):
+                params = [_sanitize_db_value(v) for v in row]
+                db.execute(sql, params)
+
+
 # DB Api -数据库连接对象connection
 def get_connection():
     try:
@@ -156,17 +175,6 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
         if '_quality' in col_name_list:
             col_name_list.remove('_quality')
 
-    # 覆盖模式：插入前先删除该日期的旧数据，避免主键冲突
-    if 'date' in data.columns and len(data.index) > 0:
-        try:
-            dates = data['date'].unique()
-            if len(dates) == 1:
-                date_value = dates[0]
-                executeSql(f'DELETE FROM `{table_name}` WHERE date = %s', (date_value,))
-                logging.info(f"database.insert: 已删除{table_name}表中日期{date_value}的旧数据")
-        except Exception as e:
-            logging.warning(f"database.insert: 删除{table_name}旧数据失败（可能表不存在）：{e}")
-
     try:
         if cols_type is None:
             data.to_sql(name=table_name, con=engine_mysql, schema=to_db, if_exists='append',
@@ -178,7 +186,16 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
             data.to_sql(name=table_name, con=engine_mysql, schema=to_db, if_exists='append',
                         dtype=cols_type, index=write_index, )
     except Exception as e:
-        logging.error(f"database.insert_other_db_from_df处理异常：{table_name}表{e}")
+        err_msg = str(e)
+        # 主键冲突时使用REPLACE INTO覆盖
+        if 'Duplicate entry' in err_msg and 'PRIMARY' in err_msg:
+            try:
+                logging.info(f"database.insert: {table_name}表存在重复数据，使用REPLACE INTO覆盖")
+                _replace_into_db(data, table_name, col_name_list, write_index)
+            except Exception as e2:
+                logging.error(f"database.insert_other_db_from_df REPLACE失败：{table_name}表{e2}")
+        else:
+            logging.error(f"database.insert_other_db_from_df处理异常：{table_name}表{e}")
 
     # 判断是否存在主键
     if not ipt.get_pk_constraint(table_name)['constrained_columns']:
