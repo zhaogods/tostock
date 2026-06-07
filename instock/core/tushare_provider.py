@@ -198,28 +198,25 @@ class TushareProvider:
         return result_df
 
     def get_fina_indicator_cached(self, date):
-        """获取财务指标（带缓存）"""
+        """获取财务指标（从缓存读取）
+
+        缓存由 instock/job/fina_indicator_job.py 生成
+        """
         import os
 
         period = self._get_latest_report_period(date)
         cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cache', 'fina', period[:4])
-        cache_file = os.path.join(cache_dir, f"fina_{period}.pkl")
+        cache_file = os.path.join(cache_dir, f"fina_{period}_all.pkl")
 
         if os.path.exists(cache_file):
             try:
                 return pd.read_pickle(cache_file)
             except Exception as e:
                 logging.warning(f"财务缓存读取失败: {e}")
+        else:
+            logging.info(f"财务缓存不存在，请先运行: python instock/job/fina_indicator_job.py")
 
-        df = self._fetch_fina_indicator_batch(period)
-        if df is not None and not df.empty:
-            try:
-                os.makedirs(cache_dir, exist_ok=True)
-                df.to_pickle(cache_file)
-            except Exception as e:
-                logging.warning(f"财务缓存写入失败: {e}")
-
-        return df
+        return None
 
     # ---- 股票实时行情 ----
     def fetch_stock_spot(self, date):
