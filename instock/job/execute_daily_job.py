@@ -38,11 +38,12 @@ __author__ = 'myh '
 __date__ = '2023/3/10 '
 
 
-def main():
+def main(run_date=None):
     start = time.time()
     _start = datetime.datetime.now()
     logging.info("######## 任务执行时间: %s #######" % _start.strftime("%Y-%m-%d %H:%M:%S.%f"))
-    run_date = _start.date()
+    if run_date is None:
+        run_date = _start.date()
     # 第1步创建数据库
     jm.run_job('init_job', bj.main, run_date)
     # 第2.1步创建股票基础数据表
@@ -76,4 +77,5 @@ def main():
 
 # main函数入口
 if __name__ == '__main__':
-    main()
+    import instock.lib.run_template as runt
+    runt.run_with_args(main)
