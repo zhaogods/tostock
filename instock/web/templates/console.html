@@ -510,6 +510,77 @@
         margin-bottom: 4px;
     }
 
+    /* 策略表现看板 */
+    .strategy-performance-section {
+        margin: 20px 0;
+    }
+
+    .strategy-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 12px;
+    }
+
+    .strategy-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 12px;
+        border: 2px solid #e5e7eb;
+        transition: all 0.2s;
+    }
+
+    .strategy-card.profitable { border-color: var(--console-green); }
+    .strategy-card.neutral { border-color: var(--console-orange); }
+    .strategy-card.losing { border-color: var(--console-red); }
+    .strategy-card.no-data { border-color: #d1d5db; }
+
+    .strategy-card-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+
+    .strategy-card-header h4 {
+        flex: 1;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .strategy-trend {
+        font-size: 16px;
+    }
+
+    .strategy-metrics {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+    }
+
+    .strategy-metric-row {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .strategy-return {
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .strategy-return.positive { color: var(--console-green); }
+    .strategy-return.negative { color: var(--console-red); }
+    .strategy-return.zero { color: #6b7280; }
+
+    .strategy-footer {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #e5e7eb;
+        font-size: 11px;
+        color: #6b7280;
+    }
+
     @media (max-width: 991px) {
         .metric-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
         .console-toolbar { text-align: left; margin-top: 16px; }
@@ -586,6 +657,64 @@
                         <template x-for="issue in asset.issues" :key="issue">
                             <div class="issue-item" x-text="issue"></div>
                         </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <div x-show="loading" style="text-align: center; padding: 20px; color: #999;">
+            加载中...
+        </div>
+    </div>
+
+    <!-- 策略表现看板 -->
+    <div class="strategy-performance-section" x-data="strategyPanel()" x-init="init()">
+        <h3 class="section-title">🎯 策略表现看板</h3>
+
+        <div class="strategy-grid">
+            <template x-for="strategy in strategies" :key="strategy.key">
+                <div class="strategy-card"
+                     :class="{
+                         'profitable': strategy.avg_return_7d > 2,
+                         'neutral': strategy.avg_return_7d > 0 && strategy.avg_return_7d <= 2,
+                         'losing': strategy.avg_return_7d < 0,
+                         'no-data': strategy.sample_count === 0
+                     }">
+
+                    <div class="strategy-card-header">
+                        <h4 x-text="strategy.name"></h4>
+                        <span class="strategy-trend" x-text="getTrendIcon(strategy.trend)"></span>
+                    </div>
+
+                    <div class="strategy-metrics">
+                        <div class="strategy-metric-row">
+                            <span>7日收益:</span>
+                            <span class="strategy-return"
+                                  :class="{
+                                      'positive': strategy.avg_return_7d > 0,
+                                      'negative': strategy.avg_return_7d < 0,
+                                      'zero': strategy.avg_return_7d === 0
+                                  }"
+                                  x-text="strategy.avg_return_7d > 0 ? `+${strategy.avg_return_7d}%` : `${strategy.avg_return_7d}%`"></span>
+                        </div>
+
+                        <div class="strategy-metric-row">
+                            <span>胜率:</span>
+                            <span x-text="`${strategy.win_rate_7d}%`"></span>
+                        </div>
+
+                        <div class="strategy-metric-row">
+                            <span>样本数:</span>
+                            <span x-text="strategy.sample_count"></span>
+                        </div>
+                    </div>
+
+                    <div class="strategy-footer" x-show="strategy.updated_at">
+                        <span x-text="`更新: ${strategy.updated_at || '未更新'}`"></span>
+                    </div>
+
+                    <div class="strategy-footer" x-show="strategy.sample_count === 0" style="color: #9ca3af;">
+                        暂无回测数据
                     </div>
                 </div>
             </template>
@@ -1086,6 +1215,41 @@
                     'critical': '异常'
                 };
                 return texts[status] || '未知';
+            }
+        }
+    }
+
+    function strategyPanel() {
+        return {
+            strategies: [],
+            loading: true,
+
+            init() {
+                this.loadStrategies();
+                setInterval(() => this.loadStrategies(), 30000);
+            },
+
+            async loadStrategies() {
+                try {
+                    const resp = await fetch('/api/strategies/performance?days=7');
+                    const data = await resp.json();
+                    if (data.ok) {
+                        this.strategies = data.strategies;
+                    }
+                } catch (e) {
+                    console.error('加载策略表现失败', e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            getTrendIcon(trend) {
+                const icons = {
+                    'up': '↑',
+                    'down': '↓',
+                    'flat': '→'
+                };
+                return icons[trend] || '→';
             }
         }
     }

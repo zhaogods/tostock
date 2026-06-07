@@ -35,6 +35,7 @@ class Application(tornado.web.Application):
         import instock.web.dailyReportHandler as dailyReportHandler
         import instock.web.consoleHandler as consoleHandler
         import instock.web.data_asset_handler as dataAssetHandler
+        import instock.web.strategy_handler as strategyHandler
 
         web_cfg = config.get_web_config()
         handlers = [
@@ -62,6 +63,8 @@ class Application(tornado.web.Application):
             # 数据资产管理。
             (r"/api/data-assets/status", dataAssetHandler.DataAssetsStatusApiHandler),
             (r"/api/data-assets/([^/]+)/detail", dataAssetHandler.DataAssetDetailApiHandler),
+            # 策略表现API。
+            (r"/api/strategies/performance", strategyHandler.StrategiesPerformanceApiHandler),
             # 获得股票指标数据。
             (r"/instock/data/indicators", dataIndicatorsHandler.GetDataIndicatorsHandler),
             # 加入关注
