@@ -18,6 +18,7 @@ import instock.core.tablestructure as tbs
 import instock.lib.database as mdb
 import instock.core.indicator.calculate_indicator as idr
 from instock.core.singleton_stock import stock_hist_data
+from instock.lib import config
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
@@ -75,7 +76,11 @@ def run_check(stocks, date=None, workers=40):
     data_column = columns
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-            future_to_data = {executor.submit(idr.get_indicator, k, stocks[k], data_column, date=date): k for k in stocks}
+            future_to_data = {
+                executor.submit(idr.get_indicator, k, stocks[k], data_column,
+                                date=date, calc_threshold=config.get_indicator_calc_threshold()): k
+                for k in stocks
+            }
             for future in concurrent.futures.as_completed(future_to_data):
                 stock = future_to_data[future]
                 try:

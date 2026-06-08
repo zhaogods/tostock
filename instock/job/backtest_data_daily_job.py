@@ -27,7 +27,7 @@ def _date_start_for_backtest(date_value):
         date_value = date_value.strftime('%Y-%m-%d')
     tmp_year, tmp_month, tmp_day = str(date_value).split('-')
     date_end = datetime.datetime(int(tmp_year), int(tmp_month), int(tmp_day))
-    return (date_end + datetime.timedelta(days=-(365 * 3))).strftime('%Y%m%d')
+    return (date_end + datetime.timedelta(days=-config.get_backtest_lookback_days())).strftime('%Y%m%d')
 
 
 def load_hist_data(stocks, workers=None):

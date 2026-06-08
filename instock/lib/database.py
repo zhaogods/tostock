@@ -146,8 +146,8 @@ def insert_db_from_df(data, table_name, cols_type, write_index, primary_keys, in
 
 # 增加一个插入到其他数据库的方法。
 def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, primary_keys, indexs=None):
-    if data is None or len(data.index) == 0:
-        logging.warning(f"database.insert: 拒绝写入空DataFrame到 {table_name}")
+    if data is None:
+        logging.warning(f"database.insert: 拒绝写入None到 {table_name}")
         return
 
     # 定义engine
@@ -158,6 +158,11 @@ def insert_other_db_from_df(to_db, data, table_name, cols_type, write_index, pri
     # 使用 http://docs.sqlalchemy.org/en/latest/core/reflection.html
     # 使用检查检查数据库表是否有主键。
     ipt = inspect(engine_mysql)
+    # init_job 依赖空DataFrame的列定义创建空表；只有表已存在时才跳过空写入。
+    if len(data.index) == 0 and ipt.has_table(table_name, schema=to_db):
+        logging.warning(f"database.insert: 拒绝写入空DataFrame到已存在表 {table_name}")
+        return
+
     col_name_list = data.columns.tolist()
     # 如果有索引，把索引增加到varchar上面。
     if write_index:

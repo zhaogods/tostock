@@ -17,10 +17,13 @@ from instock.lib.fetch_result import FetchResult, FetchStatus
 class TushareProvider:
     _API_RATE_ENV = {
         'daily': 'TUSHARE_DAILY_RATE',
+        'hist_bar': 'TUSHARE_HIST_BAR_RATE',
         'daily_basic': 'TUSHARE_DAILY_BASIC_RATE',
         'moneyflow': 'TUSHARE_MONEYFLOW_RATE',
         'stock_basic': 'TUSHARE_STOCK_BASIC_RATE',
         'fina_indicator': 'TUSHARE_FINA_INDICATOR_RATE',
+        'dividend': 'TUSHARE_DIVIDEND_RATE',
+        'block_trade': 'TUSHARE_BLOCK_TRADE_RATE',
     }
 
     STOCK_SPOT_COLUMNS = (
@@ -257,7 +260,7 @@ class TushareProvider:
         result['change_rate'] = pd.to_numeric(df['pct_chg'], errors='coerce')
         result['ups_downs'] = pd.to_numeric(df['change'], errors='coerce')
         result['volume'] = pd.to_numeric(df['vol'], errors='coerce')
-        result['deal_amount'] = pd.to_numeric(df['amount'], errors='coerce')
+        result['deal_amount'] = pd.to_numeric(df['amount'], errors='coerce') * 1000
 
         high = pd.to_numeric(df['high'], errors='coerce')
         low = pd.to_numeric(df['low'], errors='coerce')
@@ -392,10 +395,14 @@ class TushareProvider:
     def fetch_stock_hist(self, code, start_date, end_date,
                          period='daily', adjust='qfq'):
         ts_code = self.to_ts_code(code)
+        adjust = adjust if adjust in ('qfq', 'hfq', '') else 'qfq'
+        adj_param = adjust or None
+        freq = {'daily': 'D', 'weekly': 'W', 'monthly': 'M'}.get(period, period)
         result = self._call_with_retry(
-            'daily',
-            f'daily({code})',
-            lambda: self.pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            'hist_bar',
+            f'pro_bar({code}, adj={adjust or "不复权"})',
+            lambda: ts.pro_bar(ts_code=ts_code, start_date=start_date, end_date=end_date,
+                               freq=freq, adj=adj_param, asset='E')
         )
         if not result.is_success:
             return result
@@ -404,27 +411,64 @@ class TushareProvider:
         if df is None or df.empty:
             return FetchResult(FetchStatus.EMPTY, message=f"无历史数据：{code}")
 
+        df = df.copy()
+        if 'trade_date' not in df.columns:
+            return FetchResult(FetchStatus.API_ERROR, message=f"历史数据缺少trade_date字段：{code}")
         df['trade_date'] = pd.to_datetime(df['trade_date'])
+        df = df.sort_values('trade_date').reset_index(drop=True)
 
-        result = pd.DataFrame()
-        result['日期'] = df['trade_date'].dt.strftime('%Y-%m-%d')
-        result['开盘'] = pd.to_numeric(df['open'], errors='coerce')
-        result['收盘'] = pd.to_numeric(df['close'], errors='coerce')
-        result['最高'] = pd.to_numeric(df['high'], errors='coerce')
-        result['最低'] = pd.to_numeric(df['low'], errors='coerce')
-        result['成交量'] = pd.to_numeric(df['vol'], errors='coerce')
-        result['成交额'] = pd.to_numeric(df['amount'], errors='coerce')
-        pre_close = pd.to_numeric(df['pre_close'], errors='coerce')
-        high = pd.to_numeric(df['high'], errors='coerce')
-        low = pd.to_numeric(df['low'], errors='coerce')
-        result['振幅'] = np.where(
+        turnover_result = self._call_with_retry(
+            'daily_basic',
+            f'daily_basic_hist({code})',
+            lambda: self.pro.daily_basic(
+                ts_code=ts_code, start_date=start_date, end_date=end_date,
+                fields='ts_code,trade_date,turnover_rate')
+        )
+        if turnover_result.is_success and turnover_result.data is not None and not turnover_result.data.empty:
+            turnover_df = turnover_result.data.copy()
+            if 'trade_date' in turnover_df.columns and 'turnover_rate' in turnover_df.columns:
+                turnover_df['trade_date'] = pd.to_datetime(turnover_df['trade_date'])
+                turnover_df = turnover_df[['trade_date', 'turnover_rate']].drop_duplicates('trade_date', keep='last')
+                df = df.merge(turnover_df, on='trade_date', how='left')
+            else:
+                logging.warning(f"daily_basic历史换手率字段缺失，使用默认值：{code}")
+        else:
+            logging.warning(f"daily_basic历史换手率获取失败，使用默认值：{code}{turnover_result.message}")
+
+        def _numeric(column, default=0.0):
+            if column in df.columns:
+                return pd.to_numeric(df[column], errors='coerce').fillna(default)
+            return pd.Series(default, index=df.index, dtype='float64')
+
+        open_price = _numeric('open')
+        close = _numeric('close')
+        high = _numeric('high')
+        low = _numeric('low')
+        pre_close = _numeric('pre_close', np.nan)
+        pre_close = pre_close.where(pre_close > 0, close.shift(1)).fillna(0.0)
+        change = _numeric('change', np.nan)
+        change = change.where(change.notna(), close - pre_close).fillna(0.0)
+        pct_chg = _numeric('pct_chg', np.nan)
+        pct_chg = pct_chg.where(
+            pct_chg.notna(),
+            np.where(pre_close > 0, change / pre_close * 100, 0.0),
+        ).fillna(0.0)
+
+        data = pd.DataFrame()
+        data['日期'] = df['trade_date'].dt.strftime('%Y-%m-%d')
+        data['开盘'] = open_price
+        data['收盘'] = close
+        data['最高'] = high
+        data['最低'] = low
+        data['成交量'] = _numeric('vol')
+        data['成交额'] = _numeric('amount') * 1000
+        data['振幅'] = np.where(
             (pre_close > 0) & high.notna() & low.notna(),
             (high - low) / pre_close * 100, 0.0)
-        result['涨跌幅'] = pd.to_numeric(df['pct_chg'], errors='coerce')
-        result['涨跌额'] = pd.to_numeric(df['change'], errors='coerce')
-        result['换手率'] = 0.0
-        result = result.sort_values('日期').reset_index(drop=True)
-        return FetchResult(FetchStatus.SUCCESS, result)
+        data['涨跌幅'] = pct_chg
+        data['涨跌额'] = change
+        data['换手率'] = _numeric('turnover_rate')
+        return FetchResult(FetchStatus.SUCCESS, data)
 
     # ---- 批量填充历史缓存 ----
     def fill_hist_cache(self, start_date, end_date, adjust='qfq'):
@@ -454,7 +498,13 @@ class TushareProvider:
                 count += 1
                 continue
 
-            df = self.fetch_stock_hist(code, start_date, end_date, adjust=adjust)
+            hist_result = self.fetch_stock_hist(code, start_date, end_date, adjust=adjust)
+            if isinstance(hist_result, FetchResult):
+                if not hist_result.is_success:
+                    continue
+                df = hist_result.data
+            else:
+                df = hist_result
             if df is not None and not df.empty:
                 df.to_pickle(cache_file, compression='gzip')
                 count += 1
@@ -483,3 +533,143 @@ class TushareProvider:
         if column in df.columns:
             return pd.to_numeric(df[column], errors='coerce').fillna(default)
         return default
+
+    def fetch_dividend(self, date):
+        """获取分红配送数据（Tushare版本）
+
+        Args:
+            date: 查询日期
+
+        Returns:
+            DataFrame with columns: date, code, name, convertible_total_rate,
+            convertible_rate, convertible_transfer_rate, bonusaward_rate,
+            bonusaward_yield, basic_eps, bvps, per_capital_reserve,
+            per_unassign_profit, netprofit_yoy_ratio, total_shares,
+            plan_date, record_date, ex_dividend_date, progress, report_date
+        """
+        # 查询当年及前一年的分红数据（覆盖跨年公告）
+        year = date.year
+        start_date = f'{year-1}0101'
+        end_date = f'{year}1231'
+
+        result = self._call_with_retry(
+            'dividend',
+            f'dividend({year})',
+            lambda: self.pro.dividend(ann_date=start_date, end_date=end_date, fields='')
+        )
+
+        if not result.is_success or result.data is None or result.data.empty:
+            return None
+
+        df = result.data.copy()
+        df['code'] = df['ts_code'].apply(self.from_ts_code)
+
+        # 基础字段映射
+        output = pd.DataFrame()
+        output['date'] = date
+        output['code'] = df['code']
+        output['convertible_rate'] = self._safe_numeric(df, 'stk_div', 0.0)
+        output['convertible_transfer_rate'] = self._safe_numeric(df, 'stk_bo_rate', 0.0)
+        output['convertible_total_rate'] = self._safe_numeric(df, 'stk_co_rate', 0.0)
+        output['bonusaward_rate'] = self._safe_numeric(df, 'cash_div', 0.0)
+        output['plan_date'] = pd.to_datetime(df['ann_date'], errors='coerce')
+        output['record_date'] = pd.to_datetime(df['record_date'], errors='coerce')
+        output['ex_dividend_date'] = pd.to_datetime(df['ex_date'], errors='coerce')
+        output['progress'] = df['div_proc'].fillna('')
+        output['report_date'] = pd.to_datetime(df['end_date'], errors='coerce')
+
+        # 补充财务字段（从fina_indicator缓存）
+        try:
+            fina_df = self.get_fina_indicator_cached(date)
+            if fina_df is not None and not fina_df.empty:
+                output = output.merge(fina_df[['code', 'basic_eps', 'bvps', 'per_capital_reserve',
+                                                'per_unassign_profit', 'roe_weight', 'sale_gpr',
+                                                'debt_asset_ratio', 'toi_yoy_ratio']],
+                                      on='code', how='left')
+                output['netprofit_yoy_ratio'] = output['toi_yoy_ratio']
+        except Exception as e:
+            logging.warning(f"分红配送补充财务数据失败: {e}")
+
+        # 补充股票名称和总股本（从stock_basic）
+        stock_info = self._get_stock_info()
+        output['name'] = output['code'].map(lambda c: stock_info.get(c, {}).get('name', ''))
+        output['total_shares'] = output['code'].map(lambda c: stock_info.get(c, {}).get('total_share', 0))
+
+        # 计算股息率（如果有收盘价）
+        output['bonusaward_yield'] = 0.0
+
+        # 确保所有字段存在
+        for field in ['basic_eps', 'bvps', 'per_capital_reserve', 'per_unassign_profit',
+                      'roe_weight', 'sale_gpr', 'debt_asset_ratio', 'netprofit_yoy_ratio']:
+            if field not in output.columns:
+                output[field] = 0.0
+
+        return output
+
+    def fetch_block_trade(self, date):
+        """获取大宗交易数据（Tushare版本）
+
+        Args:
+            date: 查询日期
+
+        Returns:
+            DataFrame with columns: date, code, name, new_price, change_rate,
+            average_price, overflow_rate, trade_number, sum_volume,
+            sum_turnover, turnover_market_rate
+        """
+        trade_date = date.strftime('%Y%m%d')
+
+        result = self._call_with_retry(
+            'block_trade',
+            f'block_trade({trade_date})',
+            lambda: self.pro.block_trade(trade_date=trade_date)
+        )
+
+        if not result.is_success or result.data is None or result.data.empty:
+            return None
+
+        df = result.data.copy()
+        df['code'] = df['ts_code'].apply(self.from_ts_code)
+
+        # 基础字段映射
+        output = pd.DataFrame()
+        output['date'] = date
+        output['code'] = df['code']
+        output['average_price'] = self._safe_numeric(df, 'price', 0.0)
+        output['sum_volume'] = self._safe_numeric(df, 'vol', 0.0)
+        output['sum_turnover'] = self._safe_numeric(df, 'amount', 0.0)
+        output['trade_number'] = 0
+
+        # 补充股票名称
+        stock_info = self._get_stock_info()
+        output['name'] = output['code'].map(lambda c: stock_info.get(c, {}).get('name', ''))
+
+        # 补充收盘价和涨跌幅（直接调用daily接口）
+        try:
+            ts_codes = ','.join(output['code'].apply(self.to_ts_code).tolist())
+            daily_result = self._call_with_retry(
+                'daily',
+                f'daily({trade_date})',
+                lambda: self.pro.daily(trade_date=trade_date, ts_code=ts_codes)
+            )
+            if daily_result.is_success and daily_result.data is not None and not daily_result.data.empty:
+                daily_df = daily_result.data.copy()
+                daily_df['code'] = daily_df['ts_code'].apply(self.from_ts_code)
+                daily_df = daily_df[['code', 'close', 'pct_chg']].copy()
+                daily_df.columns = ['code', 'new_price', 'change_rate']
+                output = output.merge(daily_df, on='code', how='left')
+            else:
+                output['new_price'] = 0.0
+                output['change_rate'] = 0.0
+        except Exception as e:
+            logging.warning(f"大宗交易补充收盘价失败: {e}")
+            output['new_price'] = 0.0
+            output['change_rate'] = 0.0
+
+        # 计算折溢率
+        output['overflow_rate'] = ((output['average_price'] / output['new_price']) - 1) * 100
+        output['overflow_rate'] = output['overflow_rate'].replace([np.inf, -np.inf], 0.0).fillna(0.0)
+
+        output['turnover_market_rate'] = 0.0
+
+        return output

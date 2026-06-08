@@ -71,6 +71,27 @@ def get_int(name, default):
     return int(value)
 
 
+def get_hist_lookback_days(default=550):
+    days = get_int('HIST_LOOKBACK_DAYS', default)
+    if days < 300:
+        raise RuntimeError('HIST_LOOKBACK_DAYS 必须不小于 300，避免MA250策略历史数据不足')
+    return days
+
+
+def get_backtest_lookback_days(default=0):
+    days = get_int('BACKTEST_LOOKBACK_DAYS', default)
+    if days < 0:
+        raise RuntimeError('BACKTEST_LOOKBACK_DAYS 必须大于等于 0')
+    return days
+
+
+def get_indicator_calc_threshold(default=250):
+    threshold = get_int('INDICATOR_CALC_THRESHOLD', default)
+    if threshold < 200:
+        raise RuntimeError('INDICATOR_CALC_THRESHOLD 必须不小于 200，避免ma200指标无效')
+    return threshold
+
+
 def get_db_config(mask_password=False):
     cfg = {
         'host': 'localhost',
@@ -113,10 +134,13 @@ def get_tushare_token():
 def get_tushare_rate_limits():
     env_names = {
         'daily': ('TUSHARE_DAILY_RATE', 400),
+        'hist_bar': ('TUSHARE_HIST_BAR_RATE', 180),
         'daily_basic': ('TUSHARE_DAILY_BASIC_RATE', 150),
         'moneyflow': ('TUSHARE_MONEYFLOW_RATE', 150),
         'stock_basic': ('TUSHARE_STOCK_BASIC_RATE', 40),
         'fina_indicator': ('TUSHARE_FINA_INDICATOR_RATE', 160),
+        'dividend': ('TUSHARE_DIVIDEND_RATE', 120),
+        'block_trade': ('TUSHARE_BLOCK_TRADE_RATE', 120),
     }
     rates = {}
     for api_name, (env_name, default) in env_names.items():

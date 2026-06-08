@@ -3,6 +3,7 @@
 
 import datetime
 from instock.core.singleton_trade_date import stock_trade_date
+from instock.lib import config
 
 __author__ = 'myh '
 __date__ = '2023/4/10 '
@@ -121,7 +122,7 @@ def is_open(now_time):
 def get_trade_hist_interval(date):
     tmp_year, tmp_month, tmp_day = date.split("-")
     date_end = datetime.datetime(int(tmp_year), int(tmp_month), int(tmp_day))
-    date_start = (date_end + datetime.timedelta(days=-(365 * 3))).strftime("%Y%m%d")
+    date_start = (date_end + datetime.timedelta(days=-config.get_hist_lookback_days())).strftime("%Y%m%d")
 
     now_time = datetime.datetime.now()
     now_date = now_time.date()

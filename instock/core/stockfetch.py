@@ -448,7 +448,7 @@ def _normalize_stock_hist_data(stock):
 
 
 # 增加读取股票缓存方法。加快处理速度。多线程解决效率
-def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
+def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust='qfq'):
     cache_dir = os.path.join(stock_hist_cache_path, date_start[0:6], date_start)
     # 如果没有文件夹创建一个。月文件夹和日文件夹。方便删除。
     try:

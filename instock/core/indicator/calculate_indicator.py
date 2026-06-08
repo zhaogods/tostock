@@ -390,7 +390,7 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
     return None
 
 
-def get_indicator(code_name, data, stock_column, date=None, calc_threshold=90):
+def get_indicator(code_name, data, stock_column, date=None, calc_threshold=250):
     try:
         if date is None:
             end_date = code_name[0]
