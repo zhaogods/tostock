@@ -263,8 +263,7 @@ html, body {
     gap: 14px;
 }
 
-.console-box,
-.pipeline-stage {
+.console-box {
     border: 1px solid var(--c-line);
     border-radius: 14px;
     background: var(--c-panel);
@@ -272,8 +271,7 @@ html, body {
     overflow: hidden;
 }
 
-.box-header,
-.stage-header {
+.box-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -335,23 +333,45 @@ html, body {
 .pipeline-toolbar {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 10px;
+    align-items: center;
+    gap: 12px;
+    padding: 0 0 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--c-line);
 }
 
 .pipeline-board {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: block;
+    background: transparent;
+}
+
+.pipeline-stage {
+    border-bottom: 1px solid var(--c-line);
+}
+
+.pipeline-stage:last-child {
+    border-bottom: 0;
+}
+
+.stage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 12px;
+    padding: 12px 0 8px;
+    font-weight: 800;
 }
 
 .stage-title {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 120px;
 }
 
 .stage-body {
     overflow-x: auto;
+    padding-bottom: 10px;
 }
 
 .task-compact-table,
@@ -666,7 +686,6 @@ html, body {
     .console-v2-sidebar { position: static; }
     .console-v2-nav { display: grid; grid-template-columns: repeat(3, 1fr); }
     .console-commandbar { flex-wrap: wrap; }
-    .pipeline-board,
     .console-grid.two-col,
     .schedule-current,
     .schedule-picker-grid,

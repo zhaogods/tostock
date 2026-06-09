@@ -184,7 +184,7 @@
                 html += '<section class="pipeline-stage" data-search-text="' + App.escapeHtml(stage.label + ' ' + stage.description) + '">'
                     + '<div class="stage-header">'
                     + '<span class="stage-title">' + App.escapeHtml(stage.label) + ' ' + App.badge('info', stage.task_count + '项') + '</span>'
-                    + '<i class="fa fa-info-circle" title="' + App.escapeHtml(stage.description || '') + '"></i>'
+                    + '<span class="console-muted" title="' + App.escapeHtml(stage.description || '') + '">' + App.escapeHtml(stage.description || '-') + '</span>'
                     + '</div>'
                     + '<div class="stage-body"><table class="task-compact-table">'
                     + '<thead><tr><th>任务</th><th>状态</th><th>调度</th><th>计划</th><th>耗时</th><th>锁组</th><th>操作</th></tr></thead>'
