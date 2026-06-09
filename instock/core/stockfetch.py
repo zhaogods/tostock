@@ -277,12 +277,12 @@ def fetch_stock_lhb_data(date,count=12):
         data = sle.stock_lhb_detail_em(start_date, end_date)
         if data is None or len(data.index) == 0:
             return None
-        _columns = list(tbs.TABLE_CN_STOCK_lHB['columns'])
+        _columns = list(tbs.TABLE_CN_STOCK_LHB['columns'])
         _columns.pop(0)
         data.columns = _columns
         data = data.loc[data['code'].apply(is_a_stock)]
         data.drop_duplicates('code', keep='last', inplace=True)
-        # data = data.sort_values(by='ranking_times', ascending=False)
+        # data = data.sort_values(by='ranking_date', ascending=False)
         if date is None:
             data.insert(0, 'date', datetime.datetime.now().strftime("%Y-%m-%d"))
         else:

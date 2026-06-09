@@ -100,14 +100,14 @@ class stock_web_module_data(metaclass=singleton_type):
             mode="query",
             type="股票基本数据",
             ico="fa fa-book",
-            name=tbs.TABLE_CN_STOCK_lHB['cn'],
-            table_name=tbs.TABLE_CN_STOCK_lHB['name'],
-            columns=tuple(tbs.TABLE_CN_STOCK_lHB['columns']),
-            column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_lHB['columns']),
+            name=tbs.TABLE_CN_STOCK_LHB['cn'],
+            table_name=tbs.TABLE_CN_STOCK_LHB['name'],
+            columns=tuple(tbs.TABLE_CN_STOCK_LHB['columns']),
+            column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_LHB['columns']),
             primary_key=[],
             is_realtime=True,
-            order_columns=f"(SELECT `datetime` FROM `{tbs.TABLE_CN_STOCK_ATTENTION['name']}` WHERE `code`=`{tbs.TABLE_CN_STOCK_lHB['name']}`.`code`) AS `cdatetime`",
-            order_by=" `cdatetime`,`ranking_times` DESC"
+            order_columns=f"(SELECT `datetime` FROM `{tbs.TABLE_CN_STOCK_ATTENTION['name']}` WHERE `code`=`{tbs.TABLE_CN_STOCK_LHB['name']}`.`code`) AS `cdatetime`",
+            order_by=" `cdatetime` DESC, `ranking_date` DESC"
         ), wmd.web_module_data(
             mode="query",
             type="股票基本数据",
@@ -237,6 +237,61 @@ class stock_web_module_data(metaclass=singleton_type):
         self.data_list.extend([
             wmd.web_module_data(
                 mode="query",
+                type="运行监控",
+                ico="fa fa-list-alt",
+                name=tbs.TABLE_JOB_RUN_LOG['cn'],
+                table_name=tbs.TABLE_JOB_RUN_LOG['name'],
+                columns=tuple(tbs.TABLE_JOB_RUN_LOG['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_JOB_RUN_LOG['columns']),
+                primary_key=[],
+                is_realtime=True,
+                order_by=" `created_at` DESC"
+            ), wmd.web_module_data(
+                mode="query",
+                type="运行监控",
+                ico="fa fa-check-circle-o",
+                name=tbs.TABLE_DATA_QUALITY_LOG['cn'],
+                table_name=tbs.TABLE_DATA_QUALITY_LOG['name'],
+                columns=tuple(tbs.TABLE_DATA_QUALITY_LOG['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_DATA_QUALITY_LOG['columns']),
+                primary_key=[],
+                is_realtime=True,
+                order_by=" `created_at` DESC"
+            ), wmd.web_module_data(
+                mode="query",
+                type="运行监控",
+                ico="fa fa-tasks",
+                name=tbs.TABLE_SYSTEM_TASK_RUN['cn'],
+                table_name=tbs.TABLE_SYSTEM_TASK_RUN['name'],
+                columns=tuple(tbs.TABLE_SYSTEM_TASK_RUN['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_SYSTEM_TASK_RUN['columns']),
+                primary_key=[],
+                is_realtime=True,
+                order_by=" `start_time` DESC"
+            ), wmd.web_module_data(
+                mode="query",
+                type="运行监控",
+                ico="fa fa-clock-o",
+                name=tbs.TABLE_SYSTEM_TASK_STATE['cn'],
+                table_name=tbs.TABLE_SYSTEM_TASK_STATE['name'],
+                columns=tuple(tbs.TABLE_SYSTEM_TASK_STATE['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_SYSTEM_TASK_STATE['columns']),
+                primary_key=[],
+                is_realtime=True,
+                order_by=" `updated_at` DESC"
+            ), wmd.web_module_data(
+                mode="query",
+                type="运行监控",
+                ico="fa fa-bell",
+                name=tbs.TABLE_SYSTEM_TASK_NOTICE['cn'],
+                table_name=tbs.TABLE_SYSTEM_TASK_NOTICE['name'],
+                columns=tuple(tbs.TABLE_SYSTEM_TASK_NOTICE['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_SYSTEM_TASK_NOTICE['columns']),
+                primary_key=[],
+                is_realtime=True,
+                order_by=" `created_at` DESC"
+            ), wmd.web_module_data(
+                mode="query",
                 type="策略分析",
                 ico="fa fa-line-chart",
                 name=tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['cn'],
@@ -267,7 +322,8 @@ class stock_web_module_data(metaclass=singleton_type):
                 column_names=[],
                 primary_key=[],
                 is_realtime=True,
-                url="/instock/console"
+                url="/instock/console",
+                is_virtual=True
             )
         ])
         for tmp in self.data_list:

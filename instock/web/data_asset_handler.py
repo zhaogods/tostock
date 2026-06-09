@@ -22,6 +22,8 @@ class _JsonMixin:
     def write_json(self, data, status=200):
         self.set_status(status)
         self.set_header('Content-Type', 'application/json;charset=UTF-8')
+        if status == 200:
+            self.set_header('Cache-Control', 'max-age=30')
         self.write(json.dumps(data, ensure_ascii=False, default=_json_default))
 
     def write_error_json(self, message, status=400, **extra):

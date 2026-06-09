@@ -1,0 +1,257 @@
+{% extends "layout/main.html" %}
+
+{% block meta %}
+<link rel="icon" href="/static/img/favicon.ico">
+<link rel="stylesheet" href="/static/css/bootstrap.min-3.4.1.css" />
+<link rel="stylesheet" href="/static/css/font-awesome.min-4.5.0.css" />
+<link rel="stylesheet" href="/static/console/console.css" />
+<script src="/static/js/jquery.min-3.7.1.js"></script>
+<script type="text/javascript">
+    if('ontouchstart' in document.documentElement) document.write("<script src='/static/js/jquery.mobile.custom.min.js'>"+"<"+"/script>");
+</script>
+<script src="/static/js/bootstrap.min-3.4.1.js"></script>
+{% end %}
+
+{% block main_content %}
+<div class="console-v2" id="consoleApp">
+    <aside class="console-v2-sidebar">
+        <div class="console-v2-brand">
+            <div class="brand-mark">IS</div>
+            <div>
+                <div class="brand-title">系统控制台</div>
+                <div class="brand-subtitle">量化任务中枢</div>
+            </div>
+        </div>
+        <nav class="console-v2-nav" id="consoleNav">
+            <button class="nav-item active" data-panel="dashboard" title="系统关键指标、调度器、数据资产和策略摘要">
+                <i class="fa fa-tachometer"></i><span>总览</span>
+            </button>
+            <button class="nav-item" data-panel="tasks" title="按数据拉取、计算、回测、报告等阶段控制任务">
+                <i class="fa fa-random"></i><span>任务管线</span>
+            </button>
+            <button class="nav-item" data-panel="assets" title="数据资产完整度、质量分和最新更新时间">
+                <i class="fa fa-database"></i><span>数据资产</span>
+            </button>
+            <button class="nav-item" data-panel="strategies" title="策略样本数、收益、胜率和趋势">
+                <i class="fa fa-line-chart"></i><span>策略表现</span>
+            </button>
+            <button class="nav-item" data-panel="reports" title="最近每日复盘报告">
+                <i class="fa fa-file-text-o"></i><span>报告</span>
+            </button>
+            <button class="nav-item" data-panel="health" title="数据库、磁盘、调度器、数据质量和通知状态">
+                <i class="fa fa-heartbeat"></i><span>系统健康</span>
+            </button>
+        </nav>
+        <div class="console-v2-sidebar-footer">
+            <a href="/" title="返回原系统首页"><i class="fa fa-home"></i> 首页</a>
+            <a href="/instock/data?table_name=cn_stock_spot" title="进入原数据表页面"><i class="fa fa-table"></i> 数据表</a>
+        </div>
+    </aside>
+
+    <main class="console-v2-main">
+        <header class="console-commandbar">
+            <div class="commandbar-left">
+                <h2 id="panelTitle">总览</h2>
+                <span class="console-status-pill" id="schedulerStatus" title="调度器心跳状态">
+                    <span class="status-dot muted"></span><span>加载中</span>
+                </span>
+                <span class="console-muted" id="lastRefreshText">尚未刷新</span>
+            </div>
+            <div class="commandbar-actions">
+                <input type="date" id="consoleDate" class="console-date" title="控制台数据查询日期">
+                <input type="search" id="consoleSearch" class="console-search" placeholder="搜索任务/资产/策略" title="筛选当前模块内容">
+                <button class="console-btn primary" id="refreshConsole" title="刷新当前控制台数据"><i class="fa fa-refresh"></i> 刷新</button>
+                <button class="console-btn" id="toggleDrawer" title="打开或关闭右侧日志/通知抽屉"><i class="fa fa-columns"></i></button>
+            </div>
+        </header>
+
+        <section class="console-panel active" id="panel-dashboard">
+            <div class="compact-metrics" id="dashboardMetrics"></div>
+            <div class="console-grid two-col">
+                <div class="console-box">
+                    <div class="box-header"><span>任务运行</span><i class="fa fa-info-circle" title="今日任务运行状态和最近执行记录"></i></div>
+                    <div id="dashboardTasks" class="box-body compact-list loading-text">加载中...</div>
+                </div>
+                <div class="console-box">
+                    <div class="box-header"><span>数据与策略</span><i class="fa fa-info-circle" title="数据资产完整度、策略收益和最新报告摘要"></i></div>
+                    <div id="dashboardBusiness" class="box-body compact-list loading-text">加载中...</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="console-panel" id="panel-tasks">
+            <div class="pipeline-toolbar">
+                <span class="console-muted">按系统阶段组织任务，说明信息请悬浮查看。</span>
+                <span id="pipelineSummary" class="console-muted"></span>
+            </div>
+            <div id="taskPipeline" class="pipeline-board loading-text">加载中...</div>
+        </section>
+
+        <section class="console-panel" id="panel-assets">
+            <div class="console-table-wrap">
+                <table class="console-table" id="assetTable">
+                    <thead>
+                    <tr><th>资产</th><th>来源</th><th>状态</th><th>完整度</th><th>质量</th><th>记录数</th><th>最新日期</th></tr>
+                    </thead>
+                    <tbody><tr><td colspan="7" class="loading-text">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="console-panel" id="panel-strategies">
+            <div class="console-table-wrap">
+                <table class="console-table" id="strategyTable">
+                    <thead>
+                    <tr><th>策略</th><th>样本</th><th>10日收益</th><th>10日胜率</th><th>趋势</th><th>更新日期</th></tr>
+                    </thead>
+                    <tbody><tr><td colspan="6" class="loading-text">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="console-panel" id="panel-reports">
+            <div id="reportList" class="report-list loading-text">加载中...</div>
+        </section>
+
+        <section class="console-panel" id="panel-health">
+            <div class="console-grid two-col">
+                <div class="console-box">
+                    <div class="box-header"><span>系统状态</span><i class="fa fa-info-circle" title="数据库连接、调度器心跳、磁盘空间和今日失败任务"></i></div>
+                    <div id="healthPanel" class="box-body compact-list loading-text">加载中...</div>
+                </div>
+                <div class="console-box">
+                    <div class="box-header"><span>数据质量</span><i class="fa fa-info-circle" title="来自 data_quality_log 的当日检查摘要"></i></div>
+                    <div id="qualityPanel" class="box-body compact-list loading-text">加载中...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <aside class="console-drawer open" id="consoleDrawer">
+        <div class="drawer-header">
+            <div>
+                <strong id="drawerTitle">运行与通知</strong>
+                <div class="console-muted small">日志和详情在此展示</div>
+            </div>
+            <button class="drawer-close" id="drawerClose" title="关闭抽屉"><i class="fa fa-times"></i></button>
+        </div>
+        <div class="drawer-tabs">
+            <button class="drawer-tab active" data-drawer="timeline">运行</button>
+            <button class="drawer-tab" data-drawer="notices">通知</button>
+            <button class="drawer-tab" data-drawer="log">日志</button>
+        </div>
+        <div class="drawer-body">
+            <div class="drawer-panel active" id="drawer-timeline"><div class="loading-text">加载中...</div></div>
+            <div class="drawer-panel" id="drawer-notices"><div class="loading-text">加载中...</div></div>
+            <div class="drawer-panel" id="drawer-log"><pre class="console-log">请选择任务日志</pre></div>
+        </div>
+    </aside>
+</div>
+
+<div class="modal fade" id="taskStartModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content console-modal">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title">启动任务</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="startTaskKey">
+                <div class="modal-task-name" id="startTaskName"></div>
+                <div class="modal-warning" id="startTaskWarning"></div>
+                <div class="form-group" id="dateArgGroup">
+                    <label>日期参数</label>
+                    <div class="schedule-mode-tabs date-arg-tabs">
+                        <button type="button" class="schedule-mode-tab active" data-date-mode="list">单日/列表</button>
+                        <button type="button" class="schedule-mode-tab" data-date-mode="range">日期范围</button>
+                    </div>
+                    <div class="date-arg-panel active" id="dateListPanel">
+                        <input type="text" class="form-control" id="startTaskDate" placeholder="YYYY-MM-DD 或逗号分隔日期">
+                        <p class="help-block">留空表示按任务默认日期运行。</p>
+                    </div>
+                    <div class="date-arg-panel" id="dateRangePanel">
+                        <div class="row">
+                            <div class="col-xs-6"><input type="text" class="form-control" id="startTaskStartDate" placeholder="开始日期 YYYY-MM-DD"></div>
+                            <div class="col-xs-6"><input type="text" class="form-control" id="startTaskEndDate" placeholder="结束日期 YYYY-MM-DD"></div>
+                        </div>
+                        <p class="help-block">起止日期需同时填写，适用于批量回填或重算。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmStartTask">启动</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="taskScheduleModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content console-modal">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title">调整任务计划</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="scheduleTaskKey">
+                <div class="modal-task-name" id="scheduleTaskName"></div>
+                <div class="schedule-current">
+                    <div>默认计划：<strong id="scheduleDefaultText">-</strong></div>
+                    <div>当前计划：<strong id="scheduleCurrentText">-</strong></div>
+                </div>
+                <div class="schedule-mode-tabs">
+                    <button type="button" class="schedule-mode-tab active" data-mode="picker">滚轮选项</button>
+                    <button type="button" class="schedule-mode-tab" data-mode="manual">直接输入</button>
+                </div>
+                <div class="schedule-mode-panel active" id="schedulePickerPanel">
+                    <div class="form-group">
+                        <label>计划类型</label>
+                        <select class="form-control schedule-select" id="schedulePreset">
+                            <option value="workday_daily">工作日固定时间</option>
+                            <option value="daily">每天固定时间</option>
+                            <option value="weekly">每周固定时间</option>
+                            <option value="interval">每 N 分钟</option>
+                            <option value="market_interval">工作日 9-15点每 N 分钟（含午休）</option>
+                        </select>
+                    </div>
+                    <div class="schedule-picker-grid">
+                        <div class="form-group"><label>小时</label><select class="form-control schedule-select" id="scheduleHour"></select></div>
+                        <div class="form-group"><label>分钟</label><select class="form-control schedule-select" id="scheduleMinute"></select></div>
+                        <div class="form-group"><label>星期</label><select class="form-control schedule-select" id="scheduleWeekday"></select></div>
+                        <div class="form-group"><label>间隔</label><select class="form-control schedule-select" id="scheduleInterval"></select></div>
+                    </div>
+                </div>
+                <div class="schedule-mode-panel" id="scheduleManualPanel">
+                    <div class="form-group">
+                        <label>Cron 表达式</label>
+                        <input type="text" class="form-control" id="scheduleCronInput" placeholder="30 17 * * 1-5">
+                        <p class="help-block">格式：分钟 小时 日期 月份 星期，例如工作日 17:30 为 30 17 * * 1-5。</p>
+                    </div>
+                </div>
+                <div class="schedule-preview">
+                    <div>生成表达式：<code id="scheduleCronPreview">-</code></div>
+                    <div id="scheduleValidationText" class="schedule-validation muted">等待校验</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" id="resetTaskSchedule">恢复默认</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveTaskSchedule">保存计划</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/console/console-core.js"></script>
+<script src="/static/console/console-dashboard.js"></script>
+<script src="/static/console/console-tasks.js"></script>
+<script src="/static/console/console-monitor.js"></script>
+<script src="/static/console/console-reports.js"></script>
+<script src="/static/console/console-timeline.js"></script>
+<script>
+    $(function () {
+        window.ConsoleApp && window.ConsoleApp.init();
+    });
+</script>
+{% end %}

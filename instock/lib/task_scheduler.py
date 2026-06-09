@@ -3,19 +3,19 @@
 
 import datetime
 import logging
-import os
 import time
 
+from instock.lib import config
+from instock.lib import cron_utils
 from instock.lib import task_registry as registry
 from instock.lib import task_runner
 
 
-DEFAULT_TICK_SECONDS = int(os.environ.get('TASK_SCHEDULER_TICK_SECONDS', '60'))
+DEFAULT_TICK_SECONDS = config.get_task_scheduler_tick_seconds()
 
 
 def scheduler_enabled():
-    value = os.environ.get('TASK_SCHEDULER_ENABLED', 'true')
-    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+    return config.get_task_scheduler_enabled()
 
 
 def _minute_floor(value):
@@ -73,13 +73,23 @@ def _due_now(task, now, last_fire_time):
     return False
 
 
+def _effective_due_now(task, state, now, last_fire_time):
+    effective_schedule = task_runner.effective_schedule_for_task(task, state)
+    if effective_schedule.get('mode') == task_runner.SCHEDULE_MODE_CRON:
+        return cron_utils.cron_matches(effective_schedule.get('cron_expression'), now)
+    return _due_now(task, now, last_fire_time)
+
+
 def _recently_fired(now, last_fire_time):
     if last_fire_time is None:
         return False
     return _minute_floor(now) == _minute_floor(last_fire_time)
 
 
-def _next_fire_after(task, after):
+def _next_fire_after(task, after, state=None):
+    effective_schedule = task_runner.effective_schedule_for_task(task, state or {})
+    if effective_schedule.get('mode') == task_runner.SCHEDULE_MODE_CRON:
+        return cron_utils.next_fire_after(effective_schedule.get('cron_expression'), after)
     if not task.schedule:
         return None
     if task.schedule.get('type') == 'monitor_interval':
@@ -93,7 +103,17 @@ def _next_fire_after(task, after):
 
 
 def scheduled_tasks():
-    return [task for task in registry.all_tasks(include_internal=False) if task.schedule]
+    task_runner.ensure_task_states()
+    result = []
+    for task in registry.all_tasks(include_internal=False):
+        if task.schedule:
+            result.append(task)
+            continue
+        state = task_runner.get_task_state(task.key)
+        effective_schedule = task_runner.effective_schedule_for_task(task, state)
+        if effective_schedule.get('mode') == task_runner.SCHEDULE_MODE_CRON:
+            result.append(task)
+    return result
 
 
 def run_once(now=None):
@@ -108,11 +128,11 @@ def run_once(now=None):
         last_fire_time = state.get('last_fire_time')
         if isinstance(last_fire_time, str) and last_fire_time:
             last_fire_time = datetime.datetime.strptime(last_fire_time, '%Y-%m-%d %H:%M:%S')
-        next_fire_time = _next_fire_after(task, now)
+        next_fire_time = _next_fire_after(task, now, state)
         task_runner.update_task_state(task.key, next_fire_time=next_fire_time)
         if not enabled or not task_runner.task_enabled(task.key):
             continue
-        if not _due_now(task, now, last_fire_time):
+        if not _effective_due_now(task, state, now, last_fire_time):
             continue
         if _recently_fired(now, last_fire_time):
             continue

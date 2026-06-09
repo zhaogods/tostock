@@ -170,6 +170,14 @@ def get_job_date_workers():
     return max(1, get_int('JOB_DATE_WORKERS', 1))
 
 
+def get_task_scheduler_enabled(default=True):
+    return get_bool('TASK_SCHEDULER_ENABLED', default)
+
+
+def get_task_scheduler_tick_seconds(default=60):
+    return max(5, get_int('TASK_SCHEDULER_TICK_SECONDS', default))
+
+
 def get_stock_workers(default=4):
     return max(1, get_int('STOCK_WORKERS', default))
 

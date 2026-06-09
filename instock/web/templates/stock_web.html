@@ -53,14 +53,16 @@
         <i class="fa fa-commenting-o"></i>
         总记录/筛选记录：<b id="totalRecords">0</b> / <b id="filteredRecords">0</b> 条
         - 当前位置：第 <b id="currentRow">0</b> 行
+        <span id="loadMessage" style="margin-left:12px;color:#666;"></span>
     </div>
 </div>
 
 <script type="text/javascript">
-    const nameParam = $.getUrlVar('table_name');
+    const nameParam = $.getUrlVar('table_name') || $.getUrlVar('name');
     let dateParam = "{{ date_now }}";
-    const colInfos = {% raw web_module_data.column_names %};
+    const colInfos = {% raw column_names_json %};
     let gridApi;
+    let totalRows = 0;
 
     function buildColumnDefs() {
         return colInfos.map(function (col) {
@@ -99,17 +101,52 @@
         });
     }
 
+    function setLoadMessage(message, isError) {
+        var el = document.getElementById('loadMessage');
+        if (!el) return;
+        el.textContent = message || '';
+        el.style.color = isError ? '#d9534f' : '#666';
+    }
+
     async function loadData(date) {
-        var resp = await fetch('/instock/api_data?name=' + nameParam + '&date=' + date);
-        var data = await resp.json();
-        gridApi.setGridOption('rowData', data);
-        updateStatusBar();
+        setLoadMessage('正在加载数据...', false);
+        try {
+            var resp = await fetch('/instock/api_data?table_name=' + encodeURIComponent(nameParam) + '&date=' + encodeURIComponent(date));
+            if (!resp.ok) {
+                throw new Error('接口返回HTTP ' + resp.status);
+            }
+            var data = await resp.json();
+            if (!Array.isArray(data)) {
+                throw new Error('接口返回格式不是数组');
+            }
+            totalRows = data.length;
+            gridApi.setGridOption('rowData', data);
+            updateStatusBar();
+            if (data.length === 0) {
+                setLoadMessage('当前日期无数据，请切换日期', false);
+                if (gridApi.showNoRowsOverlay) {
+                    gridApi.showNoRowsOverlay();
+                }
+            } else {
+                setLoadMessage('', false);
+                if (gridApi.hideOverlay) {
+                    gridApi.hideOverlay();
+                }
+            }
+        } catch (e) {
+            totalRows = 0;
+            if (gridApi) {
+                gridApi.setGridOption('rowData', []);
+            }
+            updateStatusBar();
+            setLoadMessage('数据加载失败：' + e.message, true);
+        }
     }
 
     function updateStatusBar() {
         if (!gridApi) return;
         var displayed = gridApi.getDisplayedRowCount();
-        document.getElementById('totalRecords').textContent = displayed;
+        document.getElementById('totalRecords').textContent = totalRows;
         document.getElementById('filteredRecords').textContent = displayed;
     }
 

@@ -28,14 +28,14 @@ def save_nph_stock_lhb_data(date, before=True):
         if data is None or len(data.index) == 0:
             return
 
-        table_name = tbs.TABLE_CN_STOCK_lHB['name']
+        table_name = tbs.TABLE_CN_STOCK_LHB['name']
         # 删除老数据。
         if mdb.checkTableIsExist(table_name):
             del_sql = f"DELETE FROM `{table_name}` where `date` = '{date}'"
             mdb.executeSql(del_sql)
             cols_type = None
         else:
-            cols_type = tbs.get_field_types(tbs.TABLE_CN_STOCK_lHB['columns'])
+            cols_type = tbs.get_field_types(tbs.TABLE_CN_STOCK_LHB['columns'])
         mdb.insert_db_from_df(data, table_name, cols_type, False, "`date`,`code`")
     except Exception as e:
         logging.error(f"basic_data_other_daily_job.save_stock_lhb_data处理异常：{e}")

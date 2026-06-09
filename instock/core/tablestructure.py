@@ -23,7 +23,8 @@ _COLLATE = "utf8mb4_general_ci"
 
 TABLE_CN_STOCK_ATTENTION = {'name': 'cn_stock_attention', 'cn': '我的关注',
                             'columns': {'datetime': {'type': DATETIME, 'cn': '日期', 'size': 0},
-                                        'code': {'type': VARCHAR(6, _COLLATE), 'cn': '代码', 'size': 60}}}
+                                        'code': {'type': VARCHAR(6, _COLLATE), 'cn': '代码', 'size': 60},
+                                        'name': {'type': VARCHAR(20, _COLLATE), 'cn': '名称', 'size': 70}}}
 
 TABLE_JOB_RUN_LOG = {'name': 'job_run_log', 'cn': '任务运行日志',
                      'columns': {'run_date': {'type': DATE, 'cn': '运行日期', 'size': 110},
@@ -70,6 +71,8 @@ TABLE_SYSTEM_TASK_STATE = {'name': 'system_task_state', 'cn': '系统任务调�
                                        'enabled': {'type': SmallInteger, 'cn': '启用', 'size': 70},
                                        'last_fire_time': {'type': DATETIME, 'cn': '上次触发', 'size': 160},
                                        'next_fire_time': {'type': DATETIME, 'cn': '下次触发', 'size': 160},
+                                       'schedule_mode': {'type': VARCHAR(20, _COLLATE), 'cn': '计划模式', 'size': 90},
+                                       'cron_expression': {'type': VARCHAR(100, _COLLATE), 'cn': 'Cron表达式', 'size': 160},
                                        'last_run_id': {'type': VARCHAR(64, _COLLATE), 'cn': '最近运行ID', 'size': 180},
                                        'updated_at': {'type': DATETIME, 'cn': '更新时间', 'size': 160}}}
 
@@ -251,7 +254,7 @@ CN_STOCK_SECTOR_FUND_FLOW = (('行业资金流', '概念资金流'),
                                           'fund_rate_small': {'type': FLOAT, 'cn': '今日小单净流入-净占比', 'size': 70},
                                           'stock_name': {'type': VARCHAR(20, _COLLATE), 'cn': '今日主力净流入最大股', 'size': 70}}},
                              {'name': 'stock_individual_fund_flow_rank', 'cn': '5日',
-                              'columns': {'name': {'type': VARCHAR(20, _COLLATE), 'cn': '名称', 'size': 70},
+                              'columns': {'name': {'type': VARCHAR(30, _COLLATE), 'cn': '名称', 'size': 70},
                                           'change_rate_5': {'type': FLOAT, 'cn': '5日涨跌幅', 'size': 70},
                                           'fund_amount_5': {'type': BIGINT, 'cn': '5日主力净流入-净额', 'size': 100},
                                           'fund_rate_5': {'type': FLOAT, 'cn': '5日主力净流入-净占比', 'size': 70},
@@ -265,7 +268,7 @@ CN_STOCK_SECTOR_FUND_FLOW = (('行业资金流', '概念资金流'),
                                           'fund_rate_small_5': {'type': FLOAT, 'cn': '5日小单净流入-净占比', 'size': 70},
                                           'stock_name_5': {'type': VARCHAR(20, _COLLATE), 'cn': '5日主力净流入最大股', 'size': 70}}},
                              {'name': 'stock_individual_fund_flow_rank', 'cn': '10日',
-                              'columns': {'name': {'type': VARCHAR(20, _COLLATE), 'cn': '名称', 'size': 70},
+                              'columns': {'name': {'type': VARCHAR(30, _COLLATE), 'cn': '名称', 'size': 70},
                                           'change_rate_10': {'type': FLOAT, 'cn': '10日涨跌幅', 'size': 70},
                                           'fund_amount_10': {'type': BIGINT, 'cn': '10日主力净流入-净额', 'size': 100},
                                           'fund_rate_10': {'type': FLOAT, 'cn': '10日主力净流入-净占比', 'size': 70},
@@ -321,11 +324,11 @@ TABLE_CN_STOCK_TOP = {'name': 'cn_stock_top', 'cn': '股票龙虎榜(新浪)',
                                   'buy_seat': {'type': FLOAT, 'cn': '买入席位数', 'size': 100},
                                   'sell_seat': {'type': FLOAT, 'cn': '卖出席位数', 'size': 100}}}
 
-TABLE_CN_STOCK_lHB = {'name': 'cn_stock_lhb', 'cn': '股票龙虎榜',
+TABLE_CN_STOCK_LHB = {'name': 'cn_stock_lhb', 'cn': '股票龙虎榜',
                       'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 0},
                                   'code': {'type': VARCHAR(6, _COLLATE), 'cn': '代码', 'size': 60},
                                   'name': {'type': VARCHAR(20, _COLLATE), 'cn': '名称', 'size': 70},
-                                  'ranking_times': {'type': DATE, 'cn': '上榜日', 'size': 110},
+                                  'ranking_date': {'type': DATE, 'cn': '上榜日', 'size': 110},
                                   'interpret': {'type': VARCHAR(255, _COLLATE), 'cn': '解读', 'size': 150},
                                   'new_price': {'type': FLOAT, 'cn': '收盘价', 'size': 70},
                                   'change_rate': {'type': FLOAT, 'cn': '涨跌幅', 'size': 70},
@@ -343,6 +346,7 @@ TABLE_CN_STOCK_lHB = {'name': 'cn_stock_lhb', 'cn': '股票龙虎榜',
                                   'ranking_after_2': {'type': FLOAT, 'cn': '上榜后2日', 'size': 100},
                                   'ranking_after_5': {'type': FLOAT, 'cn': '上榜后5日', 'size': 100},
                                   'ranking_after_10': {'type': FLOAT, 'cn': '上榜后10日', 'size': 100}}}
+TABLE_CN_STOCK_lHB = TABLE_CN_STOCK_LHB
 
 TABLE_CN_STOCK_BLOCKTRADE = {'name': 'cn_stock_blocktrade', 'cn': '股票大宗交易',
                              'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 0},

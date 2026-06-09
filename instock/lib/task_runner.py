@@ -16,6 +16,7 @@ from pathlib import Path
 import pymysql
 
 from instock.lib import config
+from instock.lib import cron_utils
 from instock.lib import task_registry as registry
 
 STATUS_RUNNING = 'running'
@@ -24,10 +25,18 @@ STATUS_FAILED = 'failed'
 STATUS_STOPPED = 'stopped'
 STATUS_SKIPPED = 'skipped'
 
+NOTICE_STATUS_OPEN = 'open'
+NOTICE_STATUS_ACK = 'ack'
+NOTICE_STATUS_RESOLVED = 'resolved'
+
 SCHEDULER_HEARTBEAT_KEY = '__scheduler__'
 SCHEDULER_HEARTBEAT_STALE_SECONDS = 180
+SCHEDULE_MODE_DEFAULT = 'default'
+SCHEDULE_MODE_CRON = 'cron'
+MAX_LOG_READ_CHARS = 200000
 
 _RUNNING_PROCESSES = {}
+_SCHEMA_READY = False
 
 
 def _now():
@@ -39,8 +48,7 @@ def _today():
 
 
 def scheduler_enabled():
-    value = os.environ.get('TASK_SCHEDULER_ENABLED', 'true')
-    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+    return config.get_task_scheduler_enabled()
 
 
 def _parse_datetime(value):
@@ -88,6 +96,55 @@ def _pid_exists(pid):
         return True
     except OSError:
         return False
+
+
+def _terminate_process(proc, wait_seconds=5):
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=wait_seconds)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def _terminate_pid(pid):
+    if not pid:
+        return False, '任务缺少进程ID'
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False, '进程ID不合法'
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True, '运行进程已不存在'
+    except Exception as exc:
+        return False, f'停止任务失败：{exc}'
+    time.sleep(2)
+    if _pid_exists(pid):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except Exception as exc:
+            return False, f'强制停止任务失败：{exc}'
+    return True, '已发送停止信号'
+
+
+def _task_timeout_seconds(task_key):
+    task = registry.get_task(task_key)
+    return int(task.timeout_seconds or 0) if task else 0
+
+
+def _timeout_message(task_key, elapsed):
+    task = registry.get_task(task_key)
+    task_name = task.name if task else task_key
+    return f'{task_name} 运行超时（{elapsed}秒），已自动停止'
 
 
 def _project_root():
@@ -159,8 +216,42 @@ def _query(sql, params=()):
     return []
 
 
+def _column_exists(table_name, column_name):
+    rows = _query(
+        """
+        SELECT COUNT(*) AS `count`
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s
+        """,
+        (table_name, column_name),
+    )
+    return bool(rows and int(rows[0].get('count') or 0) == 1)
+
+
+def ensure_task_schema():
+    """补齐已有部署中的任务调度扩展字段。"""
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
+    from instock.lib import database as mdb
+    table_name = 'system_task_state'
+    if not mdb.checkTableIsExist(table_name):
+        return
+    if not _column_exists(table_name, 'schedule_mode'):
+        _execute(
+            "ALTER TABLE `system_task_state` ADD COLUMN `schedule_mode` "
+            "VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `next_fire_time`"
+        )
+    if not _column_exists(table_name, 'cron_expression'):
+        _execute(
+            "ALTER TABLE `system_task_state` ADD COLUMN `cron_expression` "
+            "VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `schedule_mode`"
+        )
+    _SCHEMA_READY = True
+
 
 def write_scheduler_heartbeat(now=None):
+    ensure_task_schema()
     heartbeat_time = now or _now()
     _update_state(SCHEDULER_HEARTBEAT_KEY, last_fire_time=heartbeat_time, enabled=scheduler_enabled())
 
@@ -229,7 +320,8 @@ def _update_pid(run_id, pid):
     _execute("UPDATE `system_task_run` SET `pid`=%s WHERE `run_id`=%s", (pid, run_id))
 
 
-def _update_state(task_key, last_run_id='', last_fire_time=None, next_fire_time=None, enabled=None):
+def _update_state(task_key, last_run_id='', last_fire_time=None, next_fire_time=None, enabled=None, schedule_mode=None, cron_expression=None, clear_next_fire_time=False):
+    ensure_task_schema()
     existing = _query("SELECT `task_key` FROM `system_task_state` WHERE `task_key`=%s", (task_key,))
     updated_at = _now()
     if existing:
@@ -241,22 +333,40 @@ def _update_state(task_key, last_run_id='', last_fire_time=None, next_fire_time=
         if last_fire_time is not None:
             assignments.append("`last_fire_time`=%s")
             params.append(last_fire_time)
-        if next_fire_time is not None:
+        if next_fire_time is not None or clear_next_fire_time:
             assignments.append("`next_fire_time`=%s")
             params.append(next_fire_time)
         if enabled is not None:
             assignments.append("`enabled`=%s")
             params.append(1 if enabled else 0)
+        if schedule_mode is not None:
+            assignments.append("`schedule_mode`=%s")
+            params.append(schedule_mode)
+        if cron_expression is not None:
+            assignments.append("`cron_expression`=%s")
+            params.append(cron_expression)
         params.append(task_key)
         _execute(f"UPDATE `system_task_state` SET {', '.join(assignments)} WHERE `task_key`=%s", tuple(params))
     else:
         _execute(
-            "INSERT IGNORE INTO `system_task_state` (`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at`) VALUES (%s,%s,%s,%s,%s,%s)",
-            (task_key, 1 if enabled is not False else 0, last_fire_time, next_fire_time, last_run_id, updated_at),
+            "INSERT IGNORE INTO `system_task_state` "
+            "(`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`schedule_mode`,`cron_expression`,`last_run_id`,`updated_at`) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (
+                task_key,
+                1 if enabled is not False else 0,
+                last_fire_time,
+                next_fire_time,
+                schedule_mode or SCHEDULE_MODE_DEFAULT,
+                cron_expression or '',
+                last_run_id,
+                updated_at,
+            ),
         )
 
 
 def ensure_task_states():
+    ensure_task_schema()
     rows = _query("SELECT `task_key` FROM `system_task_state`")
     existing = {row.get('task_key') for row in rows}
     updated_at = _now()
@@ -264,13 +374,20 @@ def ensure_task_states():
         if task.key in existing:
             continue
         _execute(
-            "INSERT IGNORE INTO `system_task_state` (`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at`) VALUES (%s,%s,%s,%s,%s,%s)",
-            (task.key, 1 if task.enabled_by_default else 0, None, None, '', updated_at),
+            "INSERT IGNORE INTO `system_task_state` "
+            "(`task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`schedule_mode`,`cron_expression`,`last_run_id`,`updated_at`) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (task.key, 1 if task.enabled_by_default else 0, None, None, SCHEDULE_MODE_DEFAULT, '', '', updated_at),
         )
 
 
 def get_task_state(task_key):
-    rows = _query("SELECT `task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at` FROM `system_task_state` WHERE `task_key`=%s", (task_key,))
+    ensure_task_schema()
+    rows = _query(
+        "SELECT `task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`schedule_mode`,`cron_expression`,`last_run_id`,`updated_at` "
+        "FROM `system_task_state` WHERE `task_key`=%s",
+        (task_key,),
+    )
     return rows[0] if rows else {}
 
 
@@ -279,6 +396,7 @@ def update_task_state(task_key, last_run_id='', last_fire_time=None, next_fire_t
 
 
 def task_enabled(task_key):
+    ensure_task_schema()
     task = registry.get_task(task_key)
     if task is None:
         return False
@@ -286,6 +404,77 @@ def task_enabled(task_key):
     if not rows:
         return task.enabled_by_default
     return int(rows[0]['enabled'] or 0) == 1
+
+
+def validate_task_schedule(task_key, cron_expression):
+    task = registry.get_task(task_key)
+    if task is None:
+        return False, '未知任务'
+    if not task.visible:
+        return False, '该任务不允许配置计划'
+    return cron_utils.validate_cron_expression(cron_expression)
+
+
+def effective_schedule_for_task(task, state=None):
+    state = state or {}
+    mode = state.get('schedule_mode') or SCHEDULE_MODE_DEFAULT
+    cron_expression = (state.get('cron_expression') or '').strip()
+    if mode == SCHEDULE_MODE_CRON and cron_expression:
+        ok, message = cron_utils.validate_cron_expression(cron_expression)
+        if ok:
+            return {
+                'mode': SCHEDULE_MODE_CRON,
+                'cron_expression': cron_expression,
+                'text': cron_utils.describe_cron_expression(cron_expression),
+                'valid': True,
+                'message': message,
+            }
+        return {
+            'mode': SCHEDULE_MODE_DEFAULT,
+            'cron_expression': '',
+            'text': registry.schedule_text(task.schedule),
+            'valid': False,
+            'message': message,
+        }
+    return {
+        'mode': SCHEDULE_MODE_DEFAULT,
+        'cron_expression': '',
+        'text': registry.schedule_text(task.schedule),
+        'valid': True,
+        'message': '使用默认计划',
+    }
+
+
+def set_task_schedule(task_key, schedule_mode=SCHEDULE_MODE_DEFAULT, cron_expression=''):
+    ensure_task_schema()
+    task = registry.get_task(task_key)
+    if task is None:
+        return False, {'message': '未知任务'}
+    if not task.visible:
+        return False, {'message': '该任务不允许配置计划'}
+    schedule_mode = (schedule_mode or SCHEDULE_MODE_DEFAULT).strip().lower()
+    cron_expression = (cron_expression or '').strip()
+    if schedule_mode in ('reset', SCHEDULE_MODE_DEFAULT):
+        _update_state(task_key, schedule_mode=SCHEDULE_MODE_DEFAULT, cron_expression='', clear_next_fire_time=True)
+        return True, {'message': '已恢复默认计划', 'schedule_mode': SCHEDULE_MODE_DEFAULT, 'cron_expression': ''}
+    if schedule_mode != SCHEDULE_MODE_CRON:
+        return False, {'message': '计划模式不支持'}
+    ok, message = validate_task_schedule(task_key, cron_expression)
+    if not ok:
+        return False, {'message': message}
+    next_fire_time = cron_utils.next_fire_after(cron_expression, _now())
+    _update_state(task_key, schedule_mode=SCHEDULE_MODE_CRON, cron_expression=cron_expression, next_fire_time=next_fire_time)
+    return True, {
+        'message': '已保存自定义计划',
+        'schedule_mode': SCHEDULE_MODE_CRON,
+        'cron_expression': cron_expression,
+        'schedule_text': cron_utils.describe_cron_expression(cron_expression),
+        'next_fire_time': next_fire_time,
+    }
+
+
+def reset_task_schedule(task_key):
+    return set_task_schedule(task_key, SCHEDULE_MODE_DEFAULT, '')
 
 
 def set_task_enabled(task_key, enabled):
@@ -305,24 +494,46 @@ def _cleanup_stale_running_rows():
             continue
         pid = row.get('pid')
         start_time = row.get('start_time')
+        task_key = row.get('task_key')
 
         if not pid:
             _finish_run(run_id, STATUS_FAILED, start_time, '运行记录缺少进程ID，自动修正状态')
             continue
 
-        elapsed = _elapsed_seconds(start_time)
-        if _pid_exists(pid):
-            if elapsed > 7200:
-                _finish_run(run_id, STATUS_FAILED, start_time, '任务运行时间过长且进程状态异常，自动修正状态')
+        if not _pid_exists(pid):
+            _finish_run(run_id, STATUS_FAILED, start_time, '运行进程已不存在，自动修正状态')
             continue
 
-        _finish_run(run_id, STATUS_FAILED, start_time, '运行进程已不存在，自动修正状态')
+        elapsed = _elapsed_seconds(start_time)
+        timeout_seconds = _task_timeout_seconds(task_key)
+        if timeout_seconds and elapsed >= timeout_seconds:
+            ok, message = _terminate_pid(pid)
+            if ok:
+                _finish_run(run_id, STATUS_FAILED, start_time, _timeout_message(task_key, elapsed))
+            else:
+                logging.error(f'task_runner._cleanup_stale_running_rows停止超时任务失败：{run_id}{message}')
 
 
 def _cleanup_processes():
     finished = []
     for run_id, state in list(_RUNNING_PROCESSES.items()):
         proc = state['process']
+        task_key = state.get('task_key')
+        timeout_seconds = _task_timeout_seconds(task_key)
+        elapsed = _elapsed_seconds(state['start_time'])
+        if timeout_seconds and elapsed >= timeout_seconds and proc.poll() is None:
+            message = _timeout_message(task_key, elapsed)
+            logging.warning(message)
+            _terminate_process(proc)
+            _finish_run(run_id, STATUS_FAILED, state['start_time'], message)
+            try:
+                state['log_file'].write(message + '\n')
+                state['log_file'].close()
+            except Exception:
+                pass
+            finished.append(run_id)
+            continue
+
         return_code = proc.poll()
         if return_code is None:
             continue
@@ -428,6 +639,8 @@ def normalize_date_args(date_arg='', start_date='', end_date=''):
             raise ValueError('日期参数必须是 YYYY-MM-DD 或逗号分隔日期列表')
         return [','.join(parts)]
     if start_date or end_date:
+        if not (start_date and end_date):
+            raise ValueError('日期范围需要同时提供开始日期和结束日期')
         if not (_validate_arg_token(start_date) and _validate_arg_token(end_date)):
             raise ValueError('起止日期必须是 YYYY-MM-DD')
         if start_date > end_date:
@@ -473,16 +686,16 @@ def _run_notify(task):
 
 def _notice_exists(task_key, title):
     rows = _query(
-        "SELECT `notice_id` FROM `system_task_notice` WHERE `task_key`=%s AND `title`=%s AND `status`='open' LIMIT 1",
-        (task_key, title),
+        "SELECT `notice_id` FROM `system_task_notice` WHERE `task_key`=%s AND `title`=%s AND `status`=%s LIMIT 1",
+        (task_key, title, NOTICE_STATUS_OPEN),
     )
     return bool(rows)
 
 
 def _resolve_notices(task_key, title):
     _execute(
-        "UPDATE `system_task_notice` SET `status`='resolved',`resolved_at`=%s WHERE `task_key`=%s AND `title`=%s AND `status`='open'",
-        (_now(), task_key, title),
+        "UPDATE `system_task_notice` SET `status`=%s,`resolved_at`=%s WHERE `task_key`=%s AND `title`=%s AND `status`=%s",
+        (NOTICE_STATUS_RESOLVED, _now(), task_key, title, NOTICE_STATUS_OPEN),
     )
 
 
@@ -493,7 +706,7 @@ def create_notice(task_key, level, title, message):
     created_at = _now()
     _execute(
         "INSERT INTO `system_task_notice` (`notice_id`,`level`,`task_key`,`title`,`message`,`status`,`created_at`,`ack_at`,`resolved_at`) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (notice_id, level, task_key, title, _short_message(message), 'open', created_at, None, None),
+        (notice_id, level, task_key, title, _short_message(message), NOTICE_STATUS_OPEN, created_at, None, None),
     )
     return notice_id
 
@@ -502,15 +715,31 @@ def _check_daily_pipeline(task):
     now = datetime.datetime.now()
     if now.weekday() > 4 or now.time() < datetime.time(18, 0):
         return '非日终检查窗口'
+
+    notice_title = '今日收盘后全量任务未确认成功'
+    task_rows = _query(
+        "SELECT `status`,`message` FROM `system_task_run` WHERE `run_date`=%s AND `task_key`=%s ORDER BY `start_time` DESC LIMIT 1",
+        (_today(), 'daily_pipeline'),
+    )
+    if task_rows:
+        status = task_rows[0].get('status')
+        if status == STATUS_SUCCESS:
+            _resolve_notices(task.key, notice_title)
+            return '日终主任务已成功'
+        if status == STATUS_RUNNING:
+            return '日终主任务仍在运行'
+        create_notice(task.key, 'warning', notice_title, f'daily_pipeline 今日最新状态为 {status or "未知"}，请在控制台检查运行日志。')
+        return '已生成日终任务提醒'
+
     rows = _query(
         "SELECT `status` FROM `job_run_log` WHERE `run_date`=%s AND `job_name`='daily_report_job' ORDER BY `start_time` DESC LIMIT 1",
         (_today(),),
     )
-    if not rows or rows[0].get('status') != STATUS_SUCCESS:
-        create_notice(task.key, 'warning', '今日收盘后全量任务未确认成功', '18:00 后仍未看到 daily_report_job 成功记录。')
-        return '已生成日终任务提醒'
-    _resolve_notices(task.key, '今日收盘后全量任务未确认成功')
-    return '日终任务已成功'
+    if rows and rows[0].get('status') == STATUS_SUCCESS:
+        _resolve_notices(task.key, notice_title)
+        return '日终作业记录已成功'
+    create_notice(task.key, 'warning', notice_title, '18:00 后仍未看到 daily_pipeline 或 daily_report_job 成功记录。')
+    return '已生成日终任务提醒'
 
 
 def _check_data_quality(task):
@@ -538,6 +767,9 @@ def start_task(task_key, trigger_type='manual', date_arg='', start_date='', end_
         return False, {'message': '任务未启用'}
 
     try:
+        has_date_args = any(str(value or '').strip() for value in (date_arg, start_date, end_date))
+        if has_date_args and not task.allow_date_args:
+            return False, {'message': '该任务不支持日期参数'}
         args = normalize_date_args(date_arg, start_date, end_date) if task.allow_date_args else []
     except ValueError as exc:
         return False, {'message': str(exc)}
@@ -606,15 +838,7 @@ def stop_task(run_id='', task_key=''):
         if task is not None and not task.allow_stop:
             return False, {'message': '该任务不支持停止'}
         proc = state['process']
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            try:
-                proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                pass
+        _terminate_process(proc)
         _finish_run(target_run_id, STATUS_STOPPED, state['start_time'], '已停止')
         try:
             state['log_file'].close()
@@ -635,12 +859,11 @@ def stop_task(run_id='', task_key=''):
         return False, {'message': '该任务不支持停止'}
     if not pid:
         return False, {'message': '任务缺少进程ID'}
-    try:
-        os.kill(int(pid), signal.SIGTERM)
-        _finish_run(target_run_id, STATUS_STOPPED, start_time, '已发送停止信号')
-        return True, {'message': '已发送停止信号'}
-    except Exception as exc:
-        return False, {'message': f'停止任务失败：{exc}'}
+    ok, message = _terminate_pid(pid)
+    if ok:
+        _finish_run(target_run_id, STATUS_STOPPED, start_time, message)
+        return True, {'message': message}
+    return False, {'message': message}
 
 
 def overview():
@@ -653,7 +876,7 @@ def overview():
         count = int(row.get('count') or 0)
         summary[status] = count
         summary['total'] += count
-    notice_rows = _query("SELECT COUNT(*) AS `count` FROM `system_task_notice` WHERE `status`='open'")
+    notice_rows = _query("SELECT COUNT(*) AS `count` FROM `system_task_notice` WHERE `status`=%s", (NOTICE_STATUS_OPEN,))
     open_notices = int(notice_rows[0].get('count') or 0) if notice_rows else 0
     state_rows = _query("SELECT `updated_at` FROM `system_task_state` ORDER BY `updated_at` DESC LIMIT 1")
     scheduler = scheduler_heartbeat()
@@ -668,8 +891,11 @@ def overview():
 
 def task_payloads():
     _cleanup_processes()
+    ensure_task_schema()
     running = {row.get('task_key'): row for row in _running_rows()}
-    state_rows = _query("SELECT `task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at` FROM `system_task_state`")
+    state_rows = _query(
+        "SELECT `task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`schedule_mode`,`cron_expression`,`last_run_id`,`updated_at` FROM `system_task_state`"
+    )
     states = {row.get('task_key'): row for row in state_rows}
     last_runs = _last_runs_by_task()
     payload = []
@@ -677,12 +903,20 @@ def task_payloads():
         data = task.to_dict()
         state = states.get(task.key, {})
         running_row = running.get(task.key)
+        effective_schedule = effective_schedule_for_task(task, state)
         data['enabled'] = bool(int(state.get('enabled', 1) or 0)) if state else task.enabled_by_default
         data['running'] = running_row is not None
         data['running_run_id'] = running_row.get('run_id') if running_row else ''
         data['last_fire_time'] = state.get('last_fire_time') if state else ''
         data['next_fire_time'] = state.get('next_fire_time') if state else ''
         data['last_run_id'] = state.get('last_run_id') if state else ''
+        data['schedule_mode'] = effective_schedule.get('mode')
+        data['cron_expression'] = effective_schedule.get('cron_expression')
+        data['schedule_customized'] = effective_schedule.get('mode') == SCHEDULE_MODE_CRON
+        data['default_schedule_text'] = registry.schedule_text(task.schedule)
+        data['effective_schedule_text'] = effective_schedule.get('text') or data.get('schedule_text') or ''
+        data['schedule_message'] = effective_schedule.get('message') or ''
+        data['schedule_valid'] = bool(effective_schedule.get('valid'))
         _apply_runtime_fields(task, data, running_row, last_runs.get(task.key))
         payload.append(data)
     return _rows_to_dicts(payload)
@@ -706,15 +940,27 @@ def recent_job_runs(limit=20):
     return _rows_to_dicts(rows)
 
 
-def notices(limit=20):
+def notices(limit=20, task_key='', status=''):
+    where = []
+    params = []
+    if task_key:
+        where.append("`task_key`=%s")
+        params.append(task_key)
+    if status:
+        where.append("`status`=%s")
+        params.append(status)
+    where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
+    params.append(int(limit))
     rows = _query(
-        "SELECT `notice_id`,`level`,`task_key`,`title`,`message`,`status`,`created_at`,`ack_at`,`resolved_at` FROM `system_task_notice` ORDER BY `created_at` DESC LIMIT %s",
-        (int(limit),),
+        "SELECT `notice_id`,`level`,`task_key`,`title`,`message`,`status`,`created_at`,`ack_at`,`resolved_at` "
+        f"FROM `system_task_notice`{where_sql} ORDER BY `created_at` DESC LIMIT %s",
+        tuple(params),
     )
     return _rows_to_dicts(rows)
 
 
 def console_snapshot(run_limit=30, job_limit=20, notice_limit=20):
+    ensure_task_schema()
     _cleanup_processes()
     today = _today()
     from instock.lib import database as mdb
@@ -741,7 +987,7 @@ def console_snapshot(run_limit=30, job_limit=20, notice_limit=20):
                 summary[row.get('status')] = count
                 summary['total'] += count
 
-            db.execute("SELECT COUNT(*) AS `count` FROM `system_task_notice` WHERE `status`='open'")
+            db.execute("SELECT COUNT(*) AS `count` FROM `system_task_notice` WHERE `status`=%s", (NOTICE_STATUS_OPEN,))
             notice_row = db.fetchone()
             open_notices = int(notice_row.get('count') or 0) if notice_row else 0
 
@@ -752,7 +998,7 @@ def console_snapshot(run_limit=30, job_limit=20, notice_limit=20):
             db.execute("SELECT `run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`status`,`pid`,`lock_group`,`start_time`,`log_path`,`message` FROM `system_task_run` WHERE `status`=%s ORDER BY `start_time` DESC", (STATUS_RUNNING,))
             running = {row.get('task_key'): row for row in db.fetchall()}
 
-            db.execute("SELECT `task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`last_run_id`,`updated_at` FROM `system_task_state`")
+            db.execute("SELECT `task_key`,`enabled`,`last_fire_time`,`next_fire_time`,`schedule_mode`,`cron_expression`,`last_run_id`,`updated_at` FROM `system_task_state`")
             states = {row.get('task_key'): row for row in db.fetchall()}
 
             db.execute(
@@ -770,12 +1016,20 @@ def console_snapshot(run_limit=30, job_limit=20, notice_limit=20):
                 data = task.to_dict()
                 state = states.get(task.key, {})
                 running_row = running.get(task.key)
+                effective_schedule = effective_schedule_for_task(task, state)
                 data['enabled'] = bool(int(state.get('enabled', 1) or 0)) if state else task.enabled_by_default
                 data['running'] = running_row is not None
                 data['running_run_id'] = running_row.get('run_id') if running_row else ''
                 data['last_fire_time'] = state.get('last_fire_time') if state else ''
                 data['next_fire_time'] = state.get('next_fire_time') if state else ''
                 data['last_run_id'] = state.get('last_run_id') if state else ''
+                data['schedule_mode'] = effective_schedule.get('mode')
+                data['cron_expression'] = effective_schedule.get('cron_expression')
+                data['schedule_customized'] = effective_schedule.get('mode') == SCHEDULE_MODE_CRON
+                data['default_schedule_text'] = registry.schedule_text(task.schedule)
+                data['effective_schedule_text'] = effective_schedule.get('text') or data.get('schedule_text') or ''
+                data['schedule_message'] = effective_schedule.get('message') or ''
+                data['schedule_valid'] = bool(effective_schedule.get('valid'))
                 _apply_runtime_fields(task, data, running_row, last_runs.get(task.key))
                 tasks.append(data)
 
@@ -815,19 +1069,44 @@ def console_snapshot(run_limit=30, job_limit=20, notice_limit=20):
 def ack_notice(notice_id):
     if not notice_id:
         return False, '缺少通知ID'
-    _execute("UPDATE `system_task_notice` SET `status`='ack',`ack_at`=%s WHERE `notice_id`=%s AND `status`='open'", (_now(), notice_id))
+    _execute("UPDATE `system_task_notice` SET `status`=%s,`ack_at`=%s WHERE `notice_id`=%s AND `status`=%s", (NOTICE_STATUS_ACK, _now(), notice_id, NOTICE_STATUS_OPEN))
     return True, '已确认通知'
 
 
+def ack_all_notices(task_key=''):
+    params = [NOTICE_STATUS_ACK, _now(), NOTICE_STATUS_OPEN]
+    where = "`status`=%s"
+    if task_key:
+        where += " AND `task_key`=%s"
+        params.append(task_key)
+    _execute(f"UPDATE `system_task_notice` SET `status`=%s,`ack_at`=%s WHERE {where}", tuple(params))
+    return True, '已确认全部通知'
+
+
 def read_log(run_id, max_chars=12000):
-    rows = _query("SELECT `log_path` FROM `system_task_run` WHERE `run_id`=%s", (run_id,))
+    try:
+        max_chars = int(max_chars or 12000)
+    except Exception:
+        max_chars = 12000
+    max_chars = max(1000, min(MAX_LOG_READ_CHARS, max_chars))
+    rows = _query("SELECT `run_id`,`status`,`log_path` FROM `system_task_run` WHERE `run_id`=%s", (run_id,))
     if not rows or not rows[0].get('log_path'):
         return False, '未找到日志文件'
-    log_path = Path(rows[0].get('log_path')).resolve()
+    row = rows[0]
+    log_path = Path(row.get('log_path')).resolve()
     log_root = _log_dir().resolve()
     if log_root not in log_path.parents and log_path != log_root:
         return False, '日志路径不合法'
     if not log_path.exists():
         return False, '日志文件不存在'
     text = log_path.read_text(encoding='utf-8', errors='replace')
-    return True, text[-max_chars:]
+    log_size = len(text)
+    truncated = log_size > max_chars
+    return True, {
+        'run_id': row.get('run_id') or run_id,
+        'status': row.get('status') or '',
+        'log': text[-max_chars:],
+        'log_size': log_size,
+        'max_chars': max_chars,
+        'truncated': truncated,
+    }

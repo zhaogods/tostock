@@ -42,8 +42,8 @@ class StrategiesPerformanceApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
                     'key': perf.key,
                     'name': perf.name,
                     'sample_count': perf.sample_count,
-                    'avg_return_7d': round(perf.avg_return_7d, 2),
-                    'win_rate_7d': round(perf.win_rate_7d, 2),
+                    'avg_return_10d': round(perf.avg_return_10d, 2),
+                    'win_rate_10d': round(perf.win_rate_10d, 2),
                     'trend': perf.trend,
                     'updated_at': perf.updated_at,
                 })

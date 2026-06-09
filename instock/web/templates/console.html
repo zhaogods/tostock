@@ -588,8 +588,7 @@
     }
 </style>
 
-<!-- Alpine.js for reactive components -->
-<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- 控制台动态面板使用本地 jQuery 渲染，避免外部 CDN 依赖 -->
 
 <div class="console-page">
     <div class="console-hero">
@@ -617,112 +616,17 @@
     </div>
 
     <!-- 数据健康度面板 -->
-    <div class="data-health-section" x-data="dataHealthPanel()" x-init="init()">
+    <div class="data-health-section" id="dataHealthPanel">
         <h3 class="section-title">📊 数据健康度</h3>
-
-        <div class="asset-grid">
-            <template x-for="asset in assets" :key="asset.key">
-                <div class="asset-card"
-                     :class="{'healthy': asset.completeness > 0.95,
-                              'warning': asset.completeness > 0.80 && asset.completeness <= 0.95,
-                              'critical': asset.completeness <= 0.80}">
-
-                    <div class="asset-header">
-                        <span class="asset-icon" x-text="getSourceIcon(asset.source)"></span>
-                        <h4 x-text="asset.name"></h4>
-                        <span class="asset-status-badge" x-text="getStatusText(asset.status)"></span>
-                    </div>
-
-                    <div class="asset-body">
-                        <div class="progress-bar">
-                            <div class="progress-fill"
-                                 :style="`width: ${asset.completeness * 100}%`"></div>
-                        </div>
-
-                        <div class="asset-metrics">
-                            <span class="metric">
-                                <strong x-text="asset.actual"></strong> /
-                                <span x-text="asset.expected"></span>
-                            </span>
-                            <span class="completeness"
-                                  x-text="`${(asset.completeness * 100).toFixed(1)}%`"></span>
-                        </div>
-
-                        <div class="asset-footer">
-                            <span class="last-update" x-text="asset.last_update || '未更新'"></span>
-                        </div>
-                    </div>
-
-                    <div class="asset-issues" x-show="asset.issues && asset.issues.length > 0">
-                        <template x-for="issue in asset.issues" :key="issue">
-                            <div class="issue-item" x-text="issue"></div>
-                        </template>
-                    </div>
-                </div>
-            </template>
-        </div>
-
-        <div x-show="loading" style="text-align: center; padding: 20px; color: #999;">
-            加载中...
-        </div>
+        <div class="asset-grid" id="assetGrid"></div>
+        <div id="assetLoading" style="text-align: center; padding: 20px; color: #999;">加载中...</div>
     </div>
 
     <!-- 策略表现看板 -->
-    <div class="strategy-performance-section" x-data="strategyPanel()" x-init="init()">
+    <div class="strategy-performance-section" id="strategyPanel">
         <h3 class="section-title">🎯 策略表现看板</h3>
-
-        <div class="strategy-grid">
-            <template x-for="strategy in strategies" :key="strategy.key">
-                <div class="strategy-card"
-                     :class="{
-                         'profitable': strategy.avg_return_7d > 2,
-                         'neutral': strategy.avg_return_7d > 0 && strategy.avg_return_7d <= 2,
-                         'losing': strategy.avg_return_7d < 0,
-                         'no-data': strategy.sample_count === 0
-                     }">
-
-                    <div class="strategy-card-header">
-                        <h4 x-text="strategy.name"></h4>
-                        <span class="strategy-trend" x-text="getTrendIcon(strategy.trend)"></span>
-                    </div>
-
-                    <div class="strategy-metrics">
-                        <div class="strategy-metric-row">
-                            <span>7日收益:</span>
-                            <span class="strategy-return"
-                                  :class="{
-                                      'positive': strategy.avg_return_7d > 0,
-                                      'negative': strategy.avg_return_7d < 0,
-                                      'zero': strategy.avg_return_7d === 0
-                                  }"
-                                  x-text="strategy.avg_return_7d > 0 ? `+${strategy.avg_return_7d}%` : `${strategy.avg_return_7d}%`"></span>
-                        </div>
-
-                        <div class="strategy-metric-row">
-                            <span>胜率:</span>
-                            <span x-text="`${strategy.win_rate_7d}%`"></span>
-                        </div>
-
-                        <div class="strategy-metric-row">
-                            <span>样本数:</span>
-                            <span x-text="strategy.sample_count"></span>
-                        </div>
-                    </div>
-
-                    <div class="strategy-footer" x-show="strategy.updated_at">
-                        <span x-text="`更新: ${strategy.updated_at || '未更新'}`"></span>
-                    </div>
-
-                    <div class="strategy-footer" x-show="strategy.sample_count === 0" style="color: #9ca3af;">
-                        暂无回测数据
-                    </div>
-                </div>
-            </template>
-        </div>
-
-        <div x-show="loading" style="text-align: center; padding: 20px; color: #999;">
-            加载中...
-        </div>
+        <div class="strategy-grid" id="strategyGrid"></div>
+        <div id="strategyLoading" style="text-align: center; padding: 20px; color: #999;">加载中...</div>
     </div>
 
     <div class="date-panel">
@@ -1168,90 +1072,112 @@
 
     $(document).ready(function() {
         loadConsoleStatus();
-        setInterval(loadConsoleStatus, 10000);
+        loadDataHealthPanel();
+        loadStrategyPanel();
+        setInterval(function() {
+            if (!document.hidden) loadConsoleStatus();
+        }, 10000);
+        setInterval(function() {
+            if (!document.hidden) {
+                loadDataHealthPanel();
+                loadStrategyPanel();
+            }
+        }, 60000);
     });
 
-    // 数据健康度面板 Alpine.js 组件
-    function dataHealthPanel() {
-        return {
-            assets: [],
-            loading: true,
-            selectedDate: new Date().toISOString().split('T')[0],
-
-            init() {
-                this.loadAssets();
-                setInterval(() => this.loadAssets(), 30000);
-            },
-
-            async loadAssets() {
-                try {
-                    const resp = await fetch(`/api/data-assets/status?date=${this.selectedDate}`);
-                    const data = await resp.json();
-                    if (data.ok) {
-                        this.assets = data.assets;
-                    }
-                } catch (e) {
-                    console.error('加载数据资产失败', e);
-                } finally {
-                    this.loading = false;
-                }
-            },
-
-            getSourceIcon(source) {
-                const icons = {
-                    'tushare': '📈',
-                    'eastmoney': '🌐',
-                    'akshare': '📊',
-                    'talib': '🔧',
-                    'cache': '💾'
-                };
-                return icons[source] || '📁';
-            },
-
-            getStatusText(status) {
-                const texts = {
-                    'healthy': '健康',
-                    'warning': '警告',
-                    'critical': '异常'
-                };
-                return texts[status] || '未知';
-            }
-        }
+    // 数据健康度面板 jQuery 实现
+    function getSourceIcon(source) {
+        var icons = {tushare: '📈', eastmoney: '🌐', akshare: '📊', talib: '🔧', cache: '💾'};
+        return icons[source] || '📁';
     }
 
-    function strategyPanel() {
-        return {
-            strategies: [],
-            loading: true,
+    function getAssetStatusText(status) {
+        var texts = {healthy: '健康', warning: '警告', critical: '异常'};
+        return texts[status] || '未知';
+    }
 
-            init() {
-                this.loadStrategies();
-                setInterval(() => this.loadStrategies(), 30000);
-            },
-
-            async loadStrategies() {
-                try {
-                    const resp = await fetch('/api/strategies/performance?days=7');
-                    const data = await resp.json();
-                    if (data.ok) {
-                        this.strategies = data.strategies;
-                    }
-                } catch (e) {
-                    console.error('加载策略表现失败', e);
-                } finally {
-                    this.loading = false;
-                }
-            },
-
-            getTrendIcon(trend) {
-                const icons = {
-                    'up': '↑',
-                    'down': '↓',
-                    'flat': '→'
-                };
-                return icons[trend] || '→';
+    function loadDataHealthPanel() {
+        var selectedDate = new Date().toISOString().split('T')[0];
+        $.getJSON('/api/data-assets/status', {date: selectedDate}, function(data) {
+            $('#assetLoading').hide();
+            var grid = $('#assetGrid');
+            grid.empty();
+            if (!data.ok || !data.assets || !data.assets.length) {
+                grid.html('<div class="console-empty">暂无数据资产状态</div>');
+                return;
             }
-        }
+            data.assets.forEach(function(asset) {
+                var completeness = Number(asset.completeness || 0);
+                var healthClass = completeness > 0.95 ? 'healthy' : completeness > 0.80 ? 'warning' : 'critical';
+                var html = '<div class="asset-card ' + healthClass + '">' +
+                    '<div class="asset-header">' +
+                    '<span class="asset-icon">' + getSourceIcon(asset.source) + '</span>' +
+                    '<h4>' + escapeHtml(asset.name) + '</h4>' +
+                    '<span class="asset-status-badge">' + escapeHtml(getAssetStatusText(asset.status)) + '</span>' +
+                    '</div>' +
+                    '<div class="asset-body">' +
+                    '<div class="progress-bar"><div class="progress-fill" style="width: ' + Math.min(100, completeness * 100).toFixed(1) + '%"></div></div>' +
+                    '<div class="asset-metrics">' +
+                    '<span class="metric"><strong>' + escapeHtml(asset.actual) + '</strong> / <span>' + escapeHtml(asset.expected) + '</span></span>' +
+                    '<span class="completeness">' + (completeness * 100).toFixed(1) + '%</span>' +
+                    '</div>' +
+                    '<div class="asset-footer"><span class="last-update">' + escapeHtml(asset.last_update || '未更新') + '</span></div>' +
+                    '</div>';
+                if (asset.issues && asset.issues.length > 0) {
+                    html += '<div class="asset-issues">';
+                    asset.issues.forEach(function(issue) {
+                        html += '<div class="issue-item">' + escapeHtml(issue) + '</div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
+                grid.append(html);
+            });
+        }).fail(function(xhr) {
+            $('#assetLoading').text(parseAjaxMessage(xhr, '加载数据资产失败')).css('color', '#d9534f').show();
+        });
+    }
+
+    // 策略表现看板 jQuery 实现
+    function loadStrategyPanel() {
+        $.getJSON('/api/strategies/performance', {days: 7}, function(data) {
+            $('#strategyLoading').hide();
+            var grid = $('#strategyGrid');
+            grid.empty();
+            if (!data.ok || !data.strategies || !data.strategies.length) {
+                grid.html('<div class="console-empty">暂无策略表现数据</div>');
+                return;
+            }
+            data.strategies.forEach(function(strategy) {
+                var avgReturn = Number(strategy.avg_return_10d || 0);
+                var sampleCount = Number(strategy.sample_count || 0);
+                var cardClass = avgReturn > 2 ? 'profitable' : avgReturn > 0 ? 'neutral' : avgReturn < 0 ? 'losing' : 'no-data';
+                if (sampleCount === 0) cardClass = 'no-data';
+                var returnClass = avgReturn > 0 ? 'positive' : avgReturn < 0 ? 'negative' : 'zero';
+                var returnText = avgReturn > 0 ? '+' + avgReturn.toFixed(2) + '%' : avgReturn.toFixed(2) + '%';
+                var trendIcon = {up: '↑', down: '↓', flat: '→'}[strategy.trend] || '→';
+                var html = '<div class="strategy-card ' + cardClass + '">' +
+                    '<div class="strategy-card-header">' +
+                    '<h4>' + escapeHtml(strategy.name) + '</h4>' +
+                    '<span class="strategy-trend">' + trendIcon + '</span>' +
+                    '</div>' +
+                    '<div class="strategy-metrics">' +
+                    '<div class="strategy-metric-row"><span>10日收益:</span><span class="strategy-return ' + returnClass + '">' + returnText + '</span></div>' +
+                    '<div class="strategy-metric-row"><span>10日胜率:</span><span>' + Number(strategy.win_rate_10d || 0).toFixed(2) + '%</span></div>' +
+                    '<div class="strategy-metric-row"><span>样本数:</span><span>' + escapeHtml(sampleCount) + '</span></div>' +
+                    '</div>';
+                if (strategy.updated_at) {
+                    html += '<div class="strategy-footer"><span>更新: ' + escapeHtml(strategy.updated_at) + '</span></div>';
+                }
+                if (sampleCount === 0) {
+                    html += '<div class="strategy-footer" style="color: #9ca3af;">暂无回测数据</div>';
+                }
+                html += '</div>';
+                grid.append(html);
+            });
+        }).fail(function(xhr) {
+            $('#strategyLoading').text(parseAjaxMessage(xhr, '加载策略表现失败')).css('color', '#d9534f').show();
+        });
     }
 </script>
 {% end %}

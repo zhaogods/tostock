@@ -40,6 +40,22 @@ class GetDataIndicatorsHandler(webBase.BaseHandler, ABC):
                     leftMenu=webBase.GetLeftMenu(self.request.uri))
 
 
+def _query_stock_name(handler, code):
+    if not code:
+        return ''
+    for table_name in ('cn_stock_spot', 'cn_etf_spot'):
+        try:
+            row = handler.db.get(
+                f"SELECT `name` FROM `{table_name}` WHERE `code` = %s ORDER BY `date` DESC LIMIT 1",
+                code,
+            )
+            if row is not None and row.get('name'):
+                return row.get('name')
+        except Exception as e:
+            logging.error(f"dataIndicatorsHandler._query_stock_name处理异常：{table_name}{e}")
+    return ''
+
+
 # 关注股票。
 class SaveCollectHandler(webBase.BaseHandler, ABC):
     @gen.coroutine
@@ -47,6 +63,7 @@ class SaveCollectHandler(webBase.BaseHandler, ABC):
         import datetime
         import instock.core.tablestructure as tbs
         code = self.get_argument("code", default=None, strip=False)
+        name = self.get_argument("name", default='', strip=False)
         otype = self.get_argument("otype", default=None, strip=False)
         try:
             table_name = tbs.TABLE_CN_STOCK_ATTENTION['name']
@@ -55,9 +72,11 @@ class SaveCollectHandler(webBase.BaseHandler, ABC):
                 sql = f"DELETE FROM `{table_name}` WHERE `code` = %s"
                 self.db.query(sql,code)
             else:
+                if not name:
+                    name = _query_stock_name(self, code)
                 # sql = f"INSERT INTO `{table_name}`(`datetime`, `code`) VALUE('{datetime.datetime.now()}','{code}')"
-                sql = f"INSERT INTO `{table_name}`(`datetime`, `code`) VALUE(%s, %s)"
-                self.db.query(sql,datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),code)
+                sql = f"REPLACE INTO `{table_name}`(`datetime`, `code`, `name`) VALUE(%s, %s, %s)"
+                self.db.query(sql,datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),code,name)
         except Exception as e:
             err = {"error": str(e)}
             # logging.info(err)
