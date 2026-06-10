@@ -106,11 +106,18 @@ def _asset_to_dict(status):
         'key': status.key,
         'name': status.name,
         'source': status.source,
+        'table': status.table,
+        'task_key': status.task_key,
+        'depends_on': status.depends_on,
+        'page_url': status.page_url,
+        'expected_ready_time': status.expected_ready_time,
         'expected': status.expected,
         'actual': status.actual,
         'completeness': round(status.completeness, 4),
         'quality_score': round(status.quality_score, 2),
         'status': status.status,
+        'gate_status': status.gate_status,
+        'gate_message': status.gate_message,
         'issues': status.issues,
         'last_update': status.last_update,
     }
@@ -134,6 +141,9 @@ def _summarize_assets(assets):
         'healthy': 0,
         'warning': 0,
         'critical': 0,
+        'gate_pass': 0,
+        'gate_warning': 0,
+        'gate_block': 0,
         'avg_completeness': 0.0,
         'avg_quality_score': 0.0,
         'last_update': '',
@@ -150,6 +160,10 @@ def _summarize_assets(assets):
         status = asset.get('status') or 'critical'
         if status in summary:
             summary[status] += 1
+        gate_status = asset.get('gate_status') or 'pass'
+        gate_key = f'gate_{gate_status}'
+        if gate_key in summary:
+            summary[gate_key] += 1
         total_completeness += _safe_float(asset.get('completeness'))
         total_quality += _safe_float(asset.get('quality_score'))
         if asset.get('last_update') and str(asset.get('last_update')) > last_update:
@@ -368,15 +382,78 @@ def get_task_duration_stats(task_key: Optional[str] = None):
     return stats
 
 
-def get_pipeline_map():
-    """获取任务管线阶段和任务定义"""
+def _asset_status_index(query_date=None):
+    try:
+        from instock.lib import data_asset_manager
+        statuses = data_asset_manager.get_all_assets_status(_normalize_date(query_date))
+        assets = [_asset_to_dict(status) for status in statuses]
+    except Exception as exc:
+        logging.error(f"console_service._asset_status_index处理异常：{exc}")
+        assets = []
+    by_key = {asset.get('key'): asset for asset in assets}
+    by_table = {asset.get('table'): asset for asset in assets if asset.get('table')}
+    by_task = {}
+    for asset in assets:
+        task_key = asset.get('task_key') or ''
+        if task_key:
+            by_task.setdefault(task_key, []).append(asset)
+    return assets, by_key, by_table, by_task
+
+
+def _asset_for_output(output, asset_by_key, asset_by_table):
+    if not output:
+        return None
+    if str(output).startswith('asset:'):
+        return asset_by_key.get(str(output).split(':', 1)[1])
+    return asset_by_table.get(output) or asset_by_key.get(output)
+
+
+def _task_output_assets(task, asset_by_key, asset_by_table, assets_by_task):
+    assets = list(assets_by_task.get(task.key, []))
+    seen = {asset.get('key') for asset in assets}
+    for output in task.outputs:
+        asset = _asset_for_output(output, asset_by_key, asset_by_table)
+        if asset and asset.get('key') not in seen:
+            assets.append(asset)
+            seen.add(asset.get('key'))
+    return assets
+
+
+def _task_blockers(task, runtime_tasks, output_assets):
+    blocked_by = []
+    upstream_status = []
+    for upstream_key in task.depends_on:
+        upstream = runtime_tasks.get(upstream_key, {})
+        status = upstream.get('last_status') or ('running' if upstream.get('running') else '')
+        upstream_status.append({
+            'key': upstream_key,
+            'name': upstream.get('name') or upstream_key,
+            'status': status or 'unknown',
+            'running': bool(upstream.get('running')),
+        })
+        if status in (task_runner.STATUS_FAILED, task_runner.STATUS_STOPPED):
+            blocked_by.append({'type': 'task', 'key': upstream_key, 'message': f'{upstream.get("name") or upstream_key} 最近状态为 {status}'})
+
+    for asset in output_assets:
+        gate_status = asset.get('gate_status') or 'pass'
+        if gate_status == 'block':
+            blocked_by.append({'type': 'asset', 'key': asset.get('key'), 'message': asset.get('gate_message') or f'{asset.get("name")} 质量门禁阻断'})
+    return upstream_status, blocked_by
+
+
+def get_pipeline_map(query_date=None):
+    """获取任务级 DAG、阶段分组和资产门禁状态。"""
     duration_stats = get_task_duration_stats()
     try:
         runtime_tasks = {task.get('key'): task for task in task_runner.task_payloads()}
     except Exception as exc:
         logging.error(f"console_service.get_pipeline_map获取任务运行态异常：{exc}")
         runtime_tasks = {}
+
+    all_assets, asset_by_key, asset_by_table, assets_by_task = _asset_status_index(query_date)
     stages = []
+    blocked_count = 0
+    quality_warning_count = 0
     for stage_key in registry.STAGE_ORDER:
         stage_tasks = []
         for task in registry.visible_tasks():
@@ -384,7 +461,17 @@ def get_pipeline_map():
                 continue
             item = task.to_dict()
             item.update(runtime_tasks.get(task.key, {}))
+            output_assets = _task_output_assets(task, asset_by_key, asset_by_table, assets_by_task)
+            upstream_status, blocked_by = _task_blockers(task, runtime_tasks, output_assets)
             item['duration_stats'] = duration_stats.get(task.key, {'task_key': task.key, 'sample_count': 0})
+            item['upstream_status'] = upstream_status
+            item['blocked_by'] = blocked_by
+            item['asset_statuses'] = output_assets
+            item['downstream'] = [downstream.key for downstream in registry.downstream_tasks(task.key)]
+            item['blocked'] = bool(blocked_by)
+            if item['blocked']:
+                blocked_count += 1
+            quality_warning_count += sum(1 for asset in output_assets if asset.get('gate_status') in ('warning', 'block'))
             stage_tasks.append(item)
         stages.append({
             'key': stage_key,
@@ -394,16 +481,23 @@ def get_pipeline_map():
             'tasks': stage_tasks,
         })
 
-    edges = []
-    for index in range(len(registry.STAGE_ORDER) - 1):
-        edges.append({'from': registry.STAGE_ORDER[index], 'to': registry.STAGE_ORDER[index + 1]})
-
+    edges = registry.task_edges()
+    graph_ok, graph_message = registry.validate_task_graph()
     return {
         'stages': stages,
         'edges': edges,
+        'assets': all_assets,
+        'graph': {
+            'ok': graph_ok,
+            'message': graph_message,
+            'topological_order': [task.key for task in registry.topological_tasks()],
+        },
         'summary': {
             'stage_count': len(stages),
             'task_count': sum(stage['task_count'] for stage in stages),
+            'edge_count': len(edges),
+            'blocked_count': blocked_count,
+            'quality_warning_count': quality_warning_count,
             'manual_count': sum(1 for task in registry.visible_tasks() if task.allow_manual_start),
             'stoppable_count': sum(1 for task in registry.visible_tasks() if task.allow_stop),
         },

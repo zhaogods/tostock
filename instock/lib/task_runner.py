@@ -183,6 +183,16 @@ def _json_args(args):
     return json.dumps(args, ensure_ascii=False)
 
 
+def _trade_date_from_args(args):
+    if not args:
+        return _today()
+    try:
+        first = str(args[0]).split(',', 1)[0]
+        return datetime.datetime.strptime(first, '%Y-%m-%d').date()
+    except Exception:
+        return _today()
+
+
 def _rows_to_dicts(rows):
     data = []
     for row in rows or []:
@@ -234,19 +244,30 @@ def ensure_task_schema():
     if _SCHEMA_READY:
         return
     from instock.lib import database as mdb
-    table_name = 'system_task_state'
-    if not mdb.checkTableIsExist(table_name):
-        return
-    if not _column_exists(table_name, 'schedule_mode'):
-        _execute(
-            "ALTER TABLE `system_task_state` ADD COLUMN `schedule_mode` "
-            "VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `next_fire_time`"
+    state_table_name = 'system_task_state'
+    run_table_name = 'system_task_run'
+    if mdb.checkTableIsExist(state_table_name):
+        if not _column_exists(state_table_name, 'schedule_mode'):
+            _execute(
+                "ALTER TABLE `system_task_state` ADD COLUMN `schedule_mode` "
+                "VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `next_fire_time`"
+            )
+        if not _column_exists(state_table_name, 'cron_expression'):
+            _execute(
+                "ALTER TABLE `system_task_state` ADD COLUMN `cron_expression` "
+                "VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `schedule_mode`"
+            )
+    if mdb.checkTableIsExist(run_table_name):
+        run_columns = (
+            ('trade_date', "DATE NULL AFTER `run_date`"),
+            ('pipeline_run_id', "VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `trade_date`"),
+            ('parent_run_id', "VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `pipeline_run_id`"),
+            ('attempt', "SMALLINT NULL AFTER `parent_run_id`"),
+            ('skip_reason', "VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `attempt`"),
         )
-    if not _column_exists(table_name, 'cron_expression'):
-        _execute(
-            "ALTER TABLE `system_task_state` ADD COLUMN `cron_expression` "
-            "VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `schedule_mode`"
-        )
+        for column_name, column_sql in run_columns:
+            if not _column_exists(run_table_name, column_name):
+                _execute(f"ALTER TABLE `system_task_run` ADD COLUMN `{column_name}` {column_sql}")
     _SCHEMA_READY = True
 
 
@@ -274,13 +295,16 @@ def scheduler_heartbeat():
     }
 
 
-def _create_run(task, trigger_type, args, status=STATUS_RUNNING, pid=None, log_path='', message='', run_id=None):
+def _create_run(task, trigger_type, args, status=STATUS_RUNNING, pid=None, log_path='', message='', run_id=None,
+                pipeline_run_id='', parent_run_id='', trade_date=None, attempt=1, skip_reason=''):
+    ensure_task_schema()
     run_id = run_id or uuid.uuid4().hex
     start_time = _now()
+    trade_date = trade_date or _today()
     _execute(
         "INSERT INTO `system_task_run` "
-        "(`run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`schedule_key`,`run_date`,`args`,`status`,`pid`,`lock_group`,`start_time`,`end_time`,`duration_seconds`,`log_path`,`message`,`created_at`) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "(`run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`schedule_key`,`run_date`,`trade_date`,`pipeline_run_id`,`parent_run_id`,`attempt`,`skip_reason`,`args`,`status`,`pid`,`lock_group`,`start_time`,`end_time`,`duration_seconds`,`log_path`,`message`,`created_at`) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (
             run_id,
             task.key,
@@ -289,6 +313,11 @@ def _create_run(task, trigger_type, args, status=STATUS_RUNNING, pid=None, log_p
             trigger_type,
             task.key if trigger_type == 'schedule' else '',
             _today(),
+            trade_date,
+            pipeline_run_id,
+            parent_run_id,
+            int(attempt or 1),
+            _short_message(skip_reason),
             _json_args(args),
             status,
             pid,
@@ -552,7 +581,7 @@ def _cleanup_processes():
 
 def _running_rows():
     return _query(
-        "SELECT `run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`status`,`pid`,`lock_group`,`start_time`,`log_path`,`message` "
+        "SELECT `run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`trade_date`,`pipeline_run_id`,`parent_run_id`,`attempt`,`skip_reason`,`status`,`pid`,`lock_group`,`start_time`,`log_path`,`message` "
         "FROM `system_task_run` WHERE `status`=%s ORDER BY `start_time` DESC",
         (STATUS_RUNNING,),
     )
@@ -560,7 +589,7 @@ def _running_rows():
 
 def _last_runs_by_task(limit=200):
     rows = _query(
-        "SELECT `run_id`,`task_key`,`status`,`start_time`,`end_time`,`duration_seconds`,`message` "
+        "SELECT `run_id`,`task_key`,`trade_date`,`pipeline_run_id`,`parent_run_id`,`attempt`,`skip_reason`,`status`,`start_time`,`end_time`,`duration_seconds`,`message` "
         "FROM `system_task_run` ORDER BY `created_at` DESC LIMIT %s",
         (int(limit),),
     )
@@ -782,7 +811,7 @@ def start_task(task_key, trigger_type='manual', date_arg='', start_date='', end_
     log_path = _log_dir() / f"{task.key}-{run_id}.log"
 
     if task.target_type in (registry.TARGET_BUILTIN, registry.TARGET_NOTIFY):
-        run_id, start_time = _create_run(task, trigger_type, args, log_path=str(log_path), run_id=run_id)
+        run_id, start_time = _create_run(task, trigger_type, args, log_path=str(log_path), run_id=run_id, trade_date=_trade_date_from_args(args))
         try:
             if task.target_type == registry.TARGET_BUILTIN and task.builtin == 'cleanup_hist_cache':
                 message = _cleanup_hist_cache()
@@ -925,7 +954,7 @@ def task_payloads():
 def recent_runs(limit=30):
     _cleanup_processes()
     rows = _query(
-        "SELECT `run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`run_date`,`status`,`pid`,`lock_group`,`start_time`,`end_time`,`duration_seconds`,`log_path`,`message` "
+        "SELECT `run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`run_date`,`trade_date`,`pipeline_run_id`,`parent_run_id`,`attempt`,`skip_reason`,`status`,`pid`,`lock_group`,`start_time`,`end_time`,`duration_seconds`,`log_path`,`message` "
         "FROM `system_task_run` ORDER BY `created_at` DESC LIMIT %s",
         (int(limit),),
     )
@@ -1002,7 +1031,7 @@ def console_snapshot(run_limit=30, job_limit=20, notice_limit=20):
             states = {row.get('task_key'): row for row in db.fetchall()}
 
             db.execute(
-                "SELECT `run_id`,`task_key`,`status`,`start_time`,`end_time`,`duration_seconds`,`message` "
+                "SELECT `run_id`,`task_key`,`trade_date`,`pipeline_run_id`,`parent_run_id`,`attempt`,`skip_reason`,`status`,`start_time`,`end_time`,`duration_seconds`,`message` "
                 "FROM `system_task_run` ORDER BY `created_at` DESC LIMIT %s",
                 (200,),
             )
@@ -1034,7 +1063,7 @@ def console_snapshot(run_limit=30, job_limit=20, notice_limit=20):
                 tasks.append(data)
 
             db.execute(
-                "SELECT `run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`run_date`,`status`,`pid`,`lock_group`,`start_time`,`end_time`,`duration_seconds`,`log_path`,`message` "
+                "SELECT `run_id`,`task_key`,`task_name`,`category`,`trigger_type`,`run_date`,`trade_date`,`pipeline_run_id`,`parent_run_id`,`attempt`,`skip_reason`,`status`,`pid`,`lock_group`,`start_time`,`end_time`,`duration_seconds`,`log_path`,`message` "
                 "FROM `system_task_run` ORDER BY `created_at` DESC LIMIT %s",
                 (int(run_limit),),
             )

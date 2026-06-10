@@ -28,10 +28,15 @@ class DataAsset:
     quality_checks: list
     description: str = ''
     depends_on: list = None
+    task_key: str = ''
+    page_table: str = ''
+    expected_ready_time: str = ''
 
     def __post_init__(self):
         if self.depends_on is None:
             self.depends_on = []
+        if not self.page_table:
+            self.page_table = self.table
 
 
 @dataclass
@@ -47,6 +52,17 @@ class DataAssetStatus:
     status: str
     issues: list
     last_update: Optional[str] = None
+    table: str = ''
+    task_key: str = ''
+    depends_on: list = None
+    page_url: str = ''
+    expected_ready_time: str = ''
+    gate_status: str = 'pass'
+    gate_message: str = ''
+
+    def __post_init__(self):
+        if self.depends_on is None:
+            self.depends_on = []
 
 
 def _cache_get(key):
@@ -154,6 +170,44 @@ def calculate_completeness(asset: DataAsset, actual_count: int) -> float:
     return min(1.0, actual_count / asset.expected_count)
 
 
+def _asset_page_url(asset: DataAsset) -> str:
+    if not asset.page_table:
+        return ''
+    return f'/instock/data?table_name={asset.page_table}'
+
+
+def _quality_log_summary(asset: DataAsset, query_date: date):
+    try:
+        from instock.core import data_quality
+        return data_quality.summarize_quality_log(asset.table, query_date)
+    except Exception as exc:
+        logging.error(f"data_asset_manager._quality_log_summary处理异常：{asset.key} {exc}")
+    return {
+        'total_checks': 0,
+        'failed_checks': 0,
+        'error_count': 0,
+        'warning_count': 0,
+        'issue_count': 0,
+        'latest_message': '',
+    }
+
+
+def _gate_status(asset: DataAsset, completeness: float, quality_score: float, quality_summary: dict, issues: list) -> tuple[str, str]:
+    error_count = int(quality_summary.get('error_count') or 0)
+    warning_count = int(quality_summary.get('warning_count') or 0)
+    issue_count = int(quality_summary.get('issue_count') or 0)
+    latest_message = quality_summary.get('latest_message') or ''
+    completeness_block = asset.expected_count > 0 and completeness < 0.80
+    completeness_warning = asset.expected_count > 0 and completeness < 0.95
+    if completeness_block or error_count > 0 or quality_score < 70:
+        message = latest_message or f'完整度 {round(completeness * 100, 1)}%，错误 {error_count}，质量分 {round(quality_score, 1)}'
+        return 'block', message
+    if completeness_warning or warning_count > 0 or issues:
+        message = latest_message or f'完整度 {round(completeness * 100, 1)}%，警告 {warning_count}，问题 {issue_count}'
+        return 'warning', message
+    return 'pass', '资产质量门禁通过'
+
+
 def get_asset_status(asset: DataAsset, query_date: date) -> DataAssetStatus:
     """获取单个数据资产状态"""
     query_date = _normalize_query_date(query_date)
@@ -165,14 +219,18 @@ def get_asset_status(asset: DataAsset, query_date: date) -> DataAssetStatus:
     actual_count, last_update = _get_asset_counts(asset, query_date)
     completeness = calculate_completeness(asset, actual_count)
     quality_score, issues = run_quality_checks(asset, query_date)
+    quality_summary = _quality_log_summary(asset, query_date)
+    gate_status, gate_message = _gate_status(asset, completeness, quality_score, quality_summary, issues)
 
     # 判断状态
-    if completeness >= 0.95 and quality_score >= 90:
-        status = 'healthy'
-    elif completeness >= 0.80 or quality_score >= 70:
-        status = 'warning'
-    else:
+    if gate_status == 'block':
         status = 'critical'
+    elif gate_status == 'warning':
+        status = 'warning'
+    elif completeness >= 0.95 and quality_score >= 90:
+        status = 'healthy'
+    else:
+        status = 'warning'
 
     result = DataAssetStatus(
         key=asset.key,
@@ -185,6 +243,13 @@ def get_asset_status(asset: DataAsset, query_date: date) -> DataAssetStatus:
         status=status,
         issues=issues,
         last_update=last_update,
+        table=asset.table,
+        task_key=asset.task_key,
+        depends_on=list(asset.depends_on or []),
+        page_url=_asset_page_url(asset),
+        expected_ready_time=asset.expected_ready_time,
+        gate_status=gate_status,
+        gate_message=gate_message,
     )
     _cache_set(cache_key, result)
     return result

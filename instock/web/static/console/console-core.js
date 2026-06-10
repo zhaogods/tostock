@@ -216,7 +216,8 @@
     };
 
     App.refreshPipeline = function () {
-        return App.apiGet('/instock/console/api/pipeline').done(function (resp) {
+        var dateValue = $('#consoleDate').val() || '';
+        return App.apiGet('/instock/console/api/pipeline', {date: dateValue}).done(function (resp) {
             App.state.pipeline = resp.pipeline || {};
             App.renderModule('tasks');
         }).fail(function (xhr) {

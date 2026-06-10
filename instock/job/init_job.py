@@ -164,6 +164,31 @@ def ensure_schema_extensions():
         'cron_expression',
         "`cron_expression` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `schedule_mode`",
     )
+    _ensure_column(
+        tbs.TABLE_SYSTEM_TASK_RUN['name'],
+        'trade_date',
+        "`trade_date` DATE NULL AFTER `run_date`",
+    )
+    _ensure_column(
+        tbs.TABLE_SYSTEM_TASK_RUN['name'],
+        'pipeline_run_id',
+        "`pipeline_run_id` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `trade_date`",
+    )
+    _ensure_column(
+        tbs.TABLE_SYSTEM_TASK_RUN['name'],
+        'parent_run_id',
+        "`parent_run_id` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `pipeline_run_id`",
+    )
+    _ensure_column(
+        tbs.TABLE_SYSTEM_TASK_RUN['name'],
+        'attempt',
+        "`attempt` SMALLINT NULL AFTER `parent_run_id`",
+    )
+    _ensure_column(
+        tbs.TABLE_SYSTEM_TASK_RUN['name'],
+        'skip_reason',
+        "`skip_reason` VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER `attempt`",
+    )
     _migrate_lhb_ranking_date()
     _backfill_attention_names()
 

@@ -214,7 +214,8 @@ class ConsoleStrategiesApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
 class ConsolePipelineApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
     def get(self):
         try:
-            self.write_json({'ok': True, 'pipeline': console_service.get_pipeline_map()})
+            date_arg = self.get_argument('date', default='', strip=False)
+            self.write_json({'ok': True, 'pipeline': console_service.get_pipeline_map(date_arg)})
         except Exception as e:
             logging.error(f"consoleHandler.ConsolePipelineApiHandler处理异常：{e}")
             self.write_error_json('获取任务管线失败', 500)

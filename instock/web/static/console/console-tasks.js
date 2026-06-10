@@ -31,6 +31,42 @@
         return (values || []).map(function (value) { return value == null ? '' : String(value); }).join(' ');
     }
 
+    function miniBadges(values, cls, emptyText) {
+        values = values || [];
+        if (!values.length) return '<span class="console-muted">' + App.escapeHtml(emptyText || '-') + '</span>';
+        return values.slice(0, 4).map(function (value) {
+            return '<span class="mini-chip ' + (cls || '') + '">' + App.escapeHtml(value) + '</span>';
+        }).join('') + (values.length > 4 ? '<span class="mini-chip muted">+' + (values.length - 4) + '</span>' : '');
+    }
+
+    function assetChips(assets) {
+        assets = assets || [];
+        if (!assets.length) return '<span class="console-muted">-</span>';
+        return assets.slice(0, 3).map(function (asset) {
+            var gate = asset.gate_status || 'pass';
+            var status = gate === 'block' ? 'critical' : gate === 'warning' ? 'warning' : 'success';
+            var title = [asset.name || asset.key, asset.table || '', asset.gate_message || '', asset.last_update ? '最新：' + asset.last_update : ''].filter(Boolean).join('\n');
+            var label = asset.name || asset.key;
+            return '<span class="mini-chip ' + status + '" title="' + App.escapeHtml(title) + '">' + App.escapeHtml(label) + '</span>';
+        }).join('') + (assets.length > 3 ? '<span class="mini-chip muted">+' + (assets.length - 3) + '</span>' : '');
+    }
+
+    function upstreamChips(task) {
+        var upstream = task.upstream_status || [];
+        if (!upstream.length) return '<span class="console-muted">源头</span>';
+        return upstream.map(function (item) {
+            var status = item.running ? 'running' : (item.status === 'success' ? 'success' : item.status === 'failed' ? 'critical' : 'muted');
+            return '<span class="mini-chip ' + status + '" title="上游：' + App.escapeHtml(item.name || item.key) + '">' + App.escapeHtml(item.name || item.key) + '</span>';
+        }).join('');
+    }
+
+    function blockBadge(task) {
+        var blockers = task.blocked_by || [];
+        if (!blockers.length) return App.badge('healthy', '未阻断');
+        var title = blockers.map(function (item) { return item.message || item.key; }).join('\n');
+        return '<span title="' + App.escapeHtml(title) + '">' + App.badge('critical', blockers.length + '项阻断') + '</span>';
+    }
+
     function renderTaskRow(task) {
         var status = task.running ? (task.timed_out ? 'warning' : 'running') : (task.last_status || (task.enabled ? 'enabled' : 'disabled'));
         var statusText = task.running ? (task.timed_out ? '运行超时' : '运行中') : (task.last_status ? App.statusText(task.last_status) : (task.enabled ? '待命' : '禁用'));
@@ -42,12 +78,15 @@
             task.warning ? '警告：' + task.warning : '',
             task.feeds_pages ? '关联页面：' + task.feeds_pages : '',
             task.lock_group ? '互斥组：' + task.lock_group : '',
+            (task.depends_on || []).length ? '上游任务：' + (task.depends_on || []).join(', ') : '',
+            (task.outputs || []).length ? '产出：' + (task.outputs || []).join(', ') : '',
             task.timeout_seconds ? '超时阈值：' + App.formatSeconds(task.timeout_seconds) : '',
             task.timed_out ? '当前已超过超时阈值，系统会尝试自动停止。' : '',
             task.next_fire_time ? '下次触发：' + App.formatDateTime(task.next_fire_time) : '',
             task.cron_expression ? 'Cron：' + task.cron_expression : ''
         ].filter(Boolean).join('\n');
-        var searchText = safeJoin([task.key, task.name, task.category, task.description, task.feeds_pages, task.last_status, schedule, task.cron_expression]);
+        var assetNames = (task.asset_statuses || []).map(function (asset) { return asset.name || asset.key; });
+        var searchText = safeJoin([task.key, task.name, task.category, task.description, task.feeds_pages, task.last_status, schedule, task.cron_expression].concat(task.depends_on || [], task.outputs || [], assetNames));
         var startDisabled = !task.allow_manual_start || task.running ? 'disabled' : '';
         var stopDisabled = !task.allow_stop || !task.running ? 'disabled' : '';
         var logDisabled = !(task.running_run_id || task.last_run_id) ? 'disabled' : '';
@@ -64,7 +103,9 @@
             + App.badge(scheduleStatus, task.schedule_customized ? '自定义' : '默认') + ' ' + App.escapeHtml(schedule)
             + '</td>'
             + '<td title="最近启动：' + App.escapeHtml(App.formatDateTime(task.last_start_time || task.last_fire_time)) + '">' + App.escapeHtml(duration) + '</td>'
-            + '<td>' + App.escapeHtml(task.lock_group || '-') + '</td>'
+            + '<td class="dependency-cell">' + upstreamChips(task) + '</td>'
+            + '<td class="asset-cell">' + assetChips(task.asset_statuses || []) + '</td>'
+            + '<td>' + blockBadge(task) + '</td>'
             + '<td><div class="task-actions">'
             + actionButton('js-start-task', 'fa-play', '启动', task.warning || '启动任务', 'data-task="' + App.escapeHtml(task.key) + '" ' + startDisabled)
             + actionButton('js-schedule-task', 'fa-clock-o', '计划', '调整任务计划', 'data-task="' + App.escapeHtml(task.key) + '"')
@@ -180,20 +221,20 @@
             stages.forEach(function (stage) {
                 var rows = (stage.tasks || []).map(function (definition) {
                     return renderTaskRow(mergedTask(definition));
-                }).join('') || '<tr><td colspan="7" class="empty-text">暂无任务</td></tr>';
+                }).join('') || '<tr><td colspan="9" class="empty-text">暂无任务</td></tr>';
                 html += '<section class="pipeline-stage" data-search-text="' + App.escapeHtml(stage.label + ' ' + stage.description) + '">'
                     + '<div class="stage-header">'
                     + '<span class="stage-title">' + App.escapeHtml(stage.label) + ' ' + App.badge('info', stage.task_count + '项') + '</span>'
                     + '<span class="console-muted" title="' + App.escapeHtml(stage.description || '') + '">' + App.escapeHtml(stage.description || '-') + '</span>'
                     + '</div>'
                     + '<div class="stage-body"><table class="task-compact-table">'
-                    + '<thead><tr><th>任务</th><th>状态</th><th>调度</th><th>计划</th><th>耗时</th><th>锁组</th><th>操作</th></tr></thead>'
+                    + '<thead><tr><th>任务</th><th>状态</th><th>调度</th><th>计划</th><th>耗时</th><th>上游</th><th>产出资产</th><th>门禁</th><th>操作</th></tr></thead>'
                     + '<tbody>' + rows + '</tbody></table></div>'
                     + '</section>';
             });
             $('#taskPipeline').html(html || '<div class="empty-text">暂无任务定义</div>');
             var summary = pipeline.summary || {};
-            $('#pipelineSummary').text('阶段 ' + (summary.stage_count || 0) + ' / 任务 ' + (summary.task_count || 0) + ' / 可手动 ' + (summary.manual_count || 0));
+            $('#pipelineSummary').text('阶段 ' + (summary.stage_count || 0) + ' / 任务 ' + (summary.task_count || 0) + ' / 依赖边 ' + (summary.edge_count || 0) + ' / 阻断 ' + (summary.blocked_count || 0) + ' / 质量 ' + (summary.quality_warning_count || 0));
         },
 
         bindEvents: function () {

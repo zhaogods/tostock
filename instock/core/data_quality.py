@@ -114,3 +114,76 @@ def record_quality_results(table_name, results, run_date=None):
             ))
         except Exception as exc:
             logging.error(f"data_quality.record_quality_results处理异常：{table_name}{exc}")
+
+
+def _row_value(row, index, key=None, default=0):
+    if row is None:
+        return default
+    try:
+        if key is not None and hasattr(row, 'get'):
+            return row.get(key, default)
+    except Exception:
+        pass
+    try:
+        return row[index]
+    except Exception:
+        return default
+
+
+def summarize_quality_log(table_name, run_date=None):
+    """汇总 data_quality_log 中某表某日的质量结果，供资产门禁复用。"""
+    if run_date is None:
+        run_date = datetime.date.today()
+    try:
+        from instock.lib import database as mdb
+    except Exception as exc:
+        logging.error(f'data_quality.summarize_quality_log导入数据库异常：{exc}')
+        return {
+            'table_name': table_name,
+            'run_date': run_date,
+            'total_checks': 0,
+            'failed_checks': 0,
+            'error_count': 0,
+            'warning_count': 0,
+            'issue_count': 0,
+            'latest_message': '',
+        }
+
+    sql = (
+        "SELECT COUNT(*) AS total_checks, "
+        "SUM(CASE WHEN `passed` = 0 THEN 1 ELSE 0 END) AS failed_checks, "
+        "SUM(CASE WHEN `passed` = 0 AND `level` = 'error' THEN 1 ELSE 0 END) AS error_count, "
+        "SUM(CASE WHEN `passed` = 0 AND `level` = 'warning' THEN 1 ELSE 0 END) AS warning_count, "
+        "SUM(CASE WHEN `passed` = 0 THEN IFNULL(`issue_count`, 0) ELSE 0 END) AS issue_count "
+        "FROM `data_quality_log` WHERE `table_name` = %s AND `run_date` = %s"
+    )
+    try:
+        rows = mdb.executeSqlFetch(sql, (table_name, run_date)) or []
+    except Exception as exc:
+        logging.error(f"data_quality.summarize_quality_log统计异常：{table_name}{exc}")
+        rows = []
+    row = rows[0] if rows else None
+
+    message = ''
+    try:
+        message_rows = mdb.executeSqlFetch(
+            "SELECT `message` FROM `data_quality_log` "
+            "WHERE `table_name`=%s AND `run_date`=%s AND `passed`=0 "
+            "ORDER BY `created_at` DESC LIMIT 1",
+            (table_name, run_date),
+        ) or []
+        if message_rows:
+            message = str(_row_value(message_rows[0], 0, 'message', '') or '')
+    except Exception as exc:
+        logging.error(f"data_quality.summarize_quality_log消息异常：{table_name}{exc}")
+
+    return {
+        'table_name': table_name,
+        'run_date': run_date,
+        'total_checks': int(_row_value(row, 0, 'total_checks', 0) or 0),
+        'failed_checks': int(_row_value(row, 1, 'failed_checks', 0) or 0),
+        'error_count': int(_row_value(row, 2, 'error_count', 0) or 0),
+        'warning_count': int(_row_value(row, 3, 'warning_count', 0) or 0),
+        'issue_count': int(_row_value(row, 4, 'issue_count', 0) or 0),
+        'latest_message': message,
+    }

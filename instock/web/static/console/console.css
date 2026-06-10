@@ -476,6 +476,60 @@ html, body {
     border-color: var(--c-primary-dim);
 }
 
+.mini-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 120px;
+    margin: 1px 3px 1px 0;
+    padding: 1px 5px;
+    border: var(--c-border-width) solid var(--c-line);
+    background: var(--c-panel-soft);
+    color: var(--c-muted);
+    font-size: 9px;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+
+.mini-chip.success,
+.mini-chip.healthy {
+    color: var(--c-green-bright);
+    border-color: var(--c-green-dim);
+    background: rgba(34, 197, 94, 0.12);
+}
+
+.mini-chip.warning {
+    color: var(--c-orange-bright);
+    border-color: var(--c-orange-dim);
+    background: rgba(251, 146, 60, 0.12);
+}
+
+.mini-chip.critical {
+    color: var(--c-red-bright);
+    border-color: var(--c-red-dim);
+    background: rgba(244, 63, 94, 0.12);
+}
+
+.mini-chip.running {
+    color: var(--c-primary-bright);
+    border-color: var(--c-primary-dim);
+    background: rgba(34, 211, 238, 0.12);
+}
+
+.mini-chip.muted {
+    color: var(--c-muted-dark);
+    border-color: var(--c-line);
+    background: rgba(156, 163, 175, 0.08);
+}
+
+.dependency-cell,
+.asset-cell {
+    min-width: 130px;
+    max-width: 220px;
+}
+
 .pipeline-toolbar {
     display: flex;
     justify-content: space-between;

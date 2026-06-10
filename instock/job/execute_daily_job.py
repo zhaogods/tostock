@@ -33,12 +33,17 @@ import daily_report_job as drj
 import klinepattern_data_daily_job as kdj
 import selection_data_daily_job as sddj
 import instock.lib.job_monitor as jm
+from instock.lib import task_registry
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
 
 
 def main():
+    ok, message = task_registry.validate_task_graph()
+    if not ok:
+        logging.error(f"execute_daily_job任务依赖校验失败：{message}")
+        raise RuntimeError(message)
     start = time.time()
     _start = datetime.datetime.now()
     logging.info("######## 任务执行时间: %s #######" % _start.strftime("%Y-%m-%d %H:%M:%S.%f"))
@@ -60,10 +65,12 @@ def main():
             executor.submit(jm.run_job, 'basic_data_other_daily_job', hdtj.main, run_date),
             executor.submit(jm.run_job, 'indicators_data_daily_job', gdj.main, run_date),
             executor.submit(jm.run_job, 'klinepattern_data_daily_job', kdj.main, run_date),
-            executor.submit(jm.run_job, 'strategy_data_daily_job', sdj.main, run_date),
         ]
         for future in concurrent.futures.as_completed(futures):
             future.result()
+
+    # 策略依赖指标和历史K线准备，需在指标阶段完成后执行，保持与 task_registry DAG 一致。
+    jm.run_job('strategy_data_daily_job', sdj.main, run_date)
 
     # # # # 第6步创建股票回测
     jm.run_job('backtest_data_daily_job', bdj.main, run_date)

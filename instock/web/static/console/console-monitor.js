@@ -5,12 +5,18 @@
     function renderAssetRow(asset) {
         var completeness = Number(asset.completeness || 0);
         var status = asset.status || 'critical';
-        var searchText = [asset.key, asset.name, asset.source, status, asset.last_update].join(' ');
+        var gateStatus = asset.gate_status === 'block' ? 'critical' : asset.gate_status === 'warning' ? 'warning' : 'healthy';
+        var searchText = [asset.key, asset.name, asset.source, asset.table, asset.task_key, status, asset.gate_status, asset.last_update].join(' ');
         var issues = (asset.issues || []).join('\n');
-        return '<tr data-search-text="' + App.escapeHtml(searchText) + '" title="' + App.escapeHtml(issues || '数据资产状态') + '">'
-            + '<td><strong>' + App.escapeHtml(asset.name) + '</strong><div class="console-muted">' + App.escapeHtml(asset.key) + '</div></td>'
-            + '<td>' + App.escapeHtml(asset.source || '-') + '</td>'
-            + '<td>' + App.badge(status, App.statusText(status)) + '</td>'
+        var title = [issues, asset.gate_message || '', asset.table ? '表：' + asset.table : '', asset.task_key ? '任务：' + asset.task_key : ''].filter(Boolean).join('\n');
+        var assetName = '<strong>' + App.escapeHtml(asset.name) + '</strong><div class="console-muted">' + App.escapeHtml(asset.key) + (asset.table ? ' · ' + asset.table : '') + '</div>';
+        if (asset.page_url) {
+            assetName = '<a href="' + App.escapeHtml(asset.page_url) + '" title="打开数据表" target="_blank">' + assetName + '</a>';
+        }
+        return '<tr data-search-text="' + App.escapeHtml(searchText) + '" title="' + App.escapeHtml(title || '数据资产状态') + '">'
+            + '<td>' + assetName + '</td>'
+            + '<td>' + App.escapeHtml(asset.source || '-') + '<div class="console-muted">' + App.escapeHtml(asset.task_key || '-') + '</div></td>'
+            + '<td>' + App.badge(status, App.statusText(status)) + '<div style="margin-top:4px;">' + App.badge(gateStatus, asset.gate_status === 'block' ? '阻断' : asset.gate_status === 'warning' ? '警告' : '通过') + '</div></td>'
             + '<td>' + App.progress(completeness, status) + '</td>'
             + '<td>' + App.escapeHtml(Number(asset.quality_score || 0).toFixed(1)) + '</td>'
             + '<td>' + App.escapeHtml(asset.actual || 0) + ' / ' + App.escapeHtml(asset.expected || 0) + '</td>'

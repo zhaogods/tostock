@@ -59,6 +59,11 @@ class TaskDefinition:
     display_order: int = 100
     enabled_by_default: bool = True
     feeds_pages: str = ''
+    depends_on: tuple = ()
+    inputs: tuple = ()
+    outputs: tuple = ()
+    quality_gate: bool = False
+    rerunnable: bool = True
 
     def to_dict(self):
         data = asdict(self)
@@ -84,6 +89,8 @@ TASKS = (
         warning='全量任务会写入大量数据并执行回测，建议只在收盘后运行。',
         display_order=5,
         feeds_pages='全部数据页面',
+        outputs=('pipeline:daily',),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='realtime_refresh',
@@ -106,6 +113,8 @@ TASKS = (
         warning='会刷新当天行情数据，不要和收盘后全量任务同时运行。',
         display_order=10,
         feeds_pages='每日股票数据、每日ETF数据',
+        outputs=('cn_stock_spot', 'cn_etf_spot'),
+        rerunnable=False,
     ),
     TaskDefinition(
         key='proxy_refresh',
@@ -136,11 +145,14 @@ TASKS = (
         script='basic_data_daily_job.py',
         allow_manual_start=True,
         allow_stop=False,
+        allow_date_args=True,
         visible=True,
         lock_group='market_data_write',
         warning='盘中运行时，数据可能不完整（成交量未最终确定）。',
         display_order=30,
         feeds_pages='每日股票数据、每日ETF数据',
+        outputs=('cn_stock_spot', 'cn_etf_spot'),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='selection_data_daily_job',
@@ -151,10 +163,15 @@ TASKS = (
         script='selection_data_daily_job.py',
         allow_manual_start=True,
         allow_stop=False,
+        allow_date_args=True,
         visible=True,
         lock_group='market_data_write',
         display_order=40,
         feeds_pages='综合选股',
+        depends_on=('basic_data_daily_job',),
+        inputs=('cn_stock_spot',),
+        outputs=('cn_stock_selection',),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='basic_data_after_close_daily_job',
@@ -165,11 +182,16 @@ TASKS = (
         script='basic_data_after_close_daily_job.py',
         allow_manual_start=True,
         allow_stop=False,
+        allow_date_args=True,
         visible=True,
         lock_group='market_data_write',
         warning='大宗交易数据通常在 17:00 后才可获取。',
         display_order=50,
         feeds_pages='尾盘抢筹数据、股票大宗交易',
+        depends_on=('selection_data_daily_job',),
+        inputs=('cn_stock_selection',),
+        outputs=('cn_stock_chip_race_end', 'cn_stock_blocktrade'),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='basic_data_other_daily_job',
@@ -180,10 +202,19 @@ TASKS = (
         script='basic_data_other_daily_job.py',
         allow_manual_start=True,
         allow_stop=False,
+        allow_date_args=True,
         visible=True,
         lock_group='market_data_write',
         display_order=60,
         feeds_pages='股票资金流向、行业资金流向、概念资金流向、股票龙虎榜、股票分红配送、早盘抢筹数据、涨停原因揭密、基本面选股',
+        depends_on=('basic_data_after_close_daily_job',),
+        inputs=('cn_stock_spot',),
+        outputs=(
+            'cn_stock_fund_flow', 'cn_stock_fund_flow_industry', 'cn_stock_fund_flow_concept',
+            'cn_stock_lhb', 'cn_stock_bonus', 'cn_stock_chip_race_open', 'cn_stock_limitup_reason',
+            'cn_stock_spot_buy',
+        ),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='fina_indicator_job',
@@ -202,6 +233,10 @@ TASKS = (
         display_order=65,
         feeds_pages='每日股票数据',
         enabled_by_default=False,
+        depends_on=('basic_data_daily_job',),
+        inputs=('cn_stock_spot',),
+        outputs=('cn_stock_spot',),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='indicators_data_daily_job',
@@ -212,12 +247,17 @@ TASKS = (
         script='indicators_data_daily_job.py',
         allow_manual_start=True,
         allow_stop=True,
+        allow_date_args=True,
         visible=True,
         lock_group='market_data_write',
         timeout_seconds=7200,
         warning='需先完成当日行情拉取，否则指标基于旧数据计算。',
         display_order=110,
         feeds_pages='股票指标数据、股票指标买入、股票指标卖出',
+        depends_on=('basic_data_after_close_daily_job',),
+        inputs=('cn_stock_spot',),
+        outputs=('cn_stock_indicators', 'cn_stock_indicators_buy', 'cn_stock_indicators_sell'),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='klinepattern_data_daily_job',
@@ -228,12 +268,17 @@ TASKS = (
         script='klinepattern_data_daily_job.py',
         allow_manual_start=True,
         allow_stop=False,
+        allow_date_args=True,
         visible=True,
         lock_group='market_data_write',
         timeout_seconds=7200,
         warning='需先完成当日行情拉取。',
         display_order=120,
         feeds_pages='股票K线形态',
+        depends_on=('basic_data_after_close_daily_job',),
+        inputs=('cn_stock_spot',),
+        outputs=('cn_stock_pattern',),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='strategy_data_daily_job',
@@ -244,12 +289,17 @@ TASKS = (
         script='strategy_data_daily_job.py',
         allow_manual_start=True,
         allow_stop=True,
+        allow_date_args=True,
         visible=True,
         lock_group='market_data_write',
         timeout_seconds=7200,
         warning='需先完成技术指标计算，策略依赖历史 K 线数据。',
         display_order=130,
         feeds_pages='放量上涨、均线多头、停机坪、回踩年线、突破平台、无大幅回撤、海龟交易法则、高而窄的旗形、放量跌停、低ATR成长',
+        depends_on=('basic_data_after_close_daily_job', 'indicators_data_daily_job'),
+        inputs=('cn_stock_spot', 'cn_stock_indicators'),
+        outputs=('asset:strategies',),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='backtest_data_fill',
@@ -260,12 +310,17 @@ TASKS = (
         script='backtest_data_daily_job.py',
         allow_manual_start=True,
         allow_stop=True,
+        allow_date_args=False,
         visible=True,
         lock_group='market_data_write',
         timeout_seconds=21600,
         warning='依赖策略筛选结果，耗时可能很长。',
         display_order=210,
         feeds_pages='策略回测排行（收益数据）',
+        depends_on=('strategy_data_daily_job',),
+        inputs=('asset:strategies',),
+        outputs=('asset:strategy_returns',),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='backtest_rank_rebuild',
@@ -282,6 +337,10 @@ TASKS = (
         warning='需先完成回测收益填充，否则排行数据为空。',
         display_order=220,
         feeds_pages='策略回测排行',
+        depends_on=('backtest_data_fill',),
+        inputs=('asset:strategy_returns',),
+        outputs=('cn_stock_strategy_backtest_rank',),
+        quality_gate=True,
     ),
     TaskDefinition(
         key='daily_report_rebuild',
@@ -298,6 +357,10 @@ TASKS = (
         warning='需先完成当日全量数据拉取和计算。',
         display_order=310,
         feeds_pages='每日复盘报告',
+        depends_on=('backtest_rank_rebuild', 'basic_data_other_daily_job', 'klinepattern_data_daily_job'),
+        inputs=('cn_stock_spot', 'cn_stock_strategy_backtest_rank', 'cn_stock_fund_flow'),
+        outputs=('daily_market_report',),
+        quality_gate=False,
     ),
     TaskDefinition(
         key='init_database',
@@ -312,6 +375,8 @@ TASKS = (
         lock_group='database_schema',
         warning='用于首次部署或表结构变更后修复。',
         display_order=410,
+        outputs=('schema:project_tables',),
+        rerunnable=False,
     ),
     TaskDefinition(
         key='hist_cache_cleanup',
@@ -328,6 +393,8 @@ TASKS = (
         lock_group='cache_cleanup',
         warning='只会清理项目内 instock/cache/hist 目录。',
         display_order=420,
+        outputs=('cache:hist',),
+        rerunnable=False,
     ),
     TaskDefinition(
         key='daily_pipeline_monitor',
@@ -342,6 +409,10 @@ TASKS = (
         visible=True,
         lock_group='notice',
         display_order=510,
+        depends_on=('daily_pipeline',),
+        inputs=('system_task_run', 'job_run_log'),
+        outputs=('system_task_notice',),
+        rerunnable=False,
     ),
     TaskDefinition(
         key='data_quality_monitor',
@@ -356,6 +427,9 @@ TASKS = (
         visible=True,
         lock_group='notice',
         display_order=520,
+        inputs=('data_quality_log',),
+        outputs=('system_task_notice',),
+        rerunnable=False,
     ),
 )
 
@@ -398,3 +472,93 @@ def schedule_text(schedule):
     if schedule_type == 'monitor_interval':
         return f"每 {schedule.get('minutes')} 分钟检查"
     return schedule_type or ''
+
+
+def task_edges(task_keys=None):
+    """返回任务级 DAG 边，供控制台和未来 DAG 执行器复用。"""
+    selected = set(task_keys) if task_keys is not None else {task.key for task in all_tasks()}
+    edges = []
+    for task in all_tasks():
+        if task.key not in selected:
+            continue
+        for upstream in task.depends_on:
+            if upstream in selected:
+                edges.append({'from': upstream, 'to': task.key})
+    return edges
+
+
+def pipeline_tasks(include_monitor=False):
+    """返回平台主链路任务；排除盘中刷新、代理、系统维护等旁路任务。"""
+    excluded = {'daily_pipeline', 'realtime_refresh', 'proxy_refresh', 'fina_indicator_job', 'init_database', 'hist_cache_cleanup'}
+    if not include_monitor:
+        excluded.update({'daily_pipeline_monitor', 'data_quality_monitor'})
+    return [task for task in all_tasks() if task.key not in excluded]
+
+
+def topological_tasks(task_keys=None):
+    """对任务依赖做拓扑排序；依赖缺失或成环时只返回已能排序的前缀。"""
+    selected = set(task_keys) if task_keys is not None else {task.key for task in all_tasks()}
+    selected = {key for key in selected if key in _TASKS_BY_KEY}
+    deps = {
+        key: {dep for dep in _TASKS_BY_KEY[key].depends_on if dep in selected}
+        for key in selected
+    }
+    ready = sorted([key for key, value in deps.items() if not value], key=lambda key: _TASKS_BY_KEY[key].display_order)
+    order = []
+    while ready:
+        key = ready.pop(0)
+        if key in order:
+            continue
+        order.append(key)
+        for other, other_deps in deps.items():
+            if key not in other_deps:
+                continue
+            other_deps.remove(key)
+            if not other_deps and other not in order and other not in ready:
+                ready.append(other)
+                ready.sort(key=lambda item: _TASKS_BY_KEY[item].display_order)
+    return [_TASKS_BY_KEY[key] for key in order]
+
+
+def validate_task_graph(task_keys=None):
+    """校验任务 DAG 依赖是否存在且无环。"""
+    selected = set(task_keys) if task_keys is not None else {task.key for task in all_tasks()}
+    unknown_tasks = sorted(key for key in selected if key not in _TASKS_BY_KEY)
+    if unknown_tasks:
+        return False, f"未知任务：{','.join(unknown_tasks)}"
+
+    missing = []
+    for key in selected:
+        task = _TASKS_BY_KEY[key]
+        for upstream in task.depends_on:
+            if upstream not in _TASKS_BY_KEY:
+                missing.append(f"{key}->{upstream}")
+    if missing:
+        return False, f"任务依赖不存在：{','.join(sorted(missing))}"
+
+    order = topological_tasks(selected)
+    if len(order) != len(selected):
+        ordered = {task.key for task in order}
+        cycle_nodes = sorted(selected - ordered)
+        return False, f"任务依赖存在环：{','.join(cycle_nodes)}"
+    return True, '任务依赖校验通过'
+
+
+def upstream_tasks(task_key):
+    task = get_task(task_key)
+    if task is None:
+        return []
+    return [get_task(key) for key in task.depends_on if get_task(key) is not None]
+
+
+def downstream_tasks(task_key):
+    return [task for task in all_tasks() if task_key in task.depends_on]
+
+
+def output_producers():
+    """返回产出资产/表到生产任务 key 的映射。"""
+    result = {}
+    for task in all_tasks():
+        for output in task.outputs:
+            result.setdefault(output, []).append(task.key)
+    return result
