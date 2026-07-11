@@ -292,6 +292,28 @@ class stock_web_module_data(metaclass=singleton_type):
                 order_by=" `created_at` DESC"
             ), wmd.web_module_data(
                 mode="query",
+                type="运行监控",
+                ico="fa fa-lightbulb-o",
+                name=tbs.TABLE_AGENT_INSIGHT['cn'],
+                table_name=tbs.TABLE_AGENT_INSIGHT['name'],
+                columns=tuple(tbs.TABLE_AGENT_INSIGHT['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_AGENT_INSIGHT['columns']),
+                primary_key=[],
+                is_realtime=True,
+                order_by=" `created_at` DESC"
+            ), wmd.web_module_data(
+                mode="query",
+                type="运行监控",
+                ico="fa fa-microchip",
+                name=tbs.TABLE_AGENT_RUN_LOG['cn'],
+                table_name=tbs.TABLE_AGENT_RUN_LOG['name'],
+                columns=tuple(tbs.TABLE_AGENT_RUN_LOG['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_AGENT_RUN_LOG['columns']),
+                primary_key=[],
+                is_realtime=True,
+                order_by=" `created_at` DESC"
+            ), wmd.web_module_data(
+                mode="query",
                 type="策略分析",
                 ico="fa fa-line-chart",
                 name=tbs.TABLE_CN_STOCK_STRATEGY_BACKTEST_RANK['cn'],
@@ -312,6 +334,17 @@ class stock_web_module_data(metaclass=singleton_type):
                 primary_key=[],
                 is_realtime=False,
                 url="/instock/report/daily"
+            ), wmd.web_module_data(
+                mode="query",
+                type="每日复盘",
+                ico="fa fa-magic",
+                name=tbs.TABLE_DAILY_SELECTION_REPORT['cn'],
+                table_name=tbs.TABLE_DAILY_SELECTION_REPORT['name'],
+                columns=tuple(tbs.TABLE_DAILY_SELECTION_REPORT['columns']),
+                column_names=tbs.get_field_cns(tbs.TABLE_DAILY_SELECTION_REPORT['columns']),
+                primary_key=[],
+                is_realtime=False,
+                url="/instock/report/selection"
             ), wmd.web_module_data(
                 mode="query",
                 type="控制台",

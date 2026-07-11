@@ -363,6 +363,26 @@ TASKS = (
         quality_gate=False,
     ),
     TaskDefinition(
+        key='selection_report_rebuild',
+        name='生成每日选股报告',
+        category=STAGE_REPORT,
+        description='基于策略命中、资金流、技术信号和数据门禁生成 Markdown 每日选股报告。',
+        target_type=TARGET_SCRIPT,
+        script='selection_report_job.py',
+        allow_manual_start=True,
+        allow_stop=False,
+        allow_date_args=True,
+        visible=True,
+        lock_group='report',
+        warning='需先完成策略筛选、技术指标、K线形态、资金流和回测排行。',
+        display_order=320,
+        feeds_pages='每日选股报告',
+        depends_on=('daily_report_rebuild', 'backtest_rank_rebuild', 'strategy_data_daily_job', 'basic_data_other_daily_job', 'indicators_data_daily_job', 'klinepattern_data_daily_job'),
+        inputs=('asset:strategies', 'cn_stock_strategy_backtest_rank', 'cn_stock_spot', 'cn_stock_fund_flow', 'cn_stock_indicators_buy', 'cn_stock_pattern'),
+        outputs=('daily_selection_report',),
+        quality_gate=False,
+    ),
+    TaskDefinition(
         key='init_database',
         name='初始化/检查表结构',
         category=STAGE_SYSTEM,
@@ -431,6 +451,24 @@ TASKS = (
         outputs=('system_task_notice',),
         rerunnable=False,
     ),
+    TaskDefinition(
+        key='agent_system_watch',
+        name='Agent系统监看',
+        category=STAGE_MONITOR,
+        description='汇总任务、资产、数据质量和报告状态，生成Agent洞察与通知。',
+        target_type=TARGET_SCRIPT,
+        script='agent_system_watch_job.py',
+        schedule={'type': 'monitor_interval', 'minutes': 30},
+        allow_manual_start=True,
+        allow_stop=False,
+        allow_date_args=True,
+        visible=True,
+        lock_group='agent_monitor',
+        display_order=530,
+        inputs=('system_task_run', 'job_run_log', 'system_task_notice', 'data_quality_log', 'asset:all'),
+        outputs=('agent_insight', 'system_task_notice'),
+        rerunnable=False,
+    ),
 )
 
 
@@ -491,7 +529,7 @@ def pipeline_tasks(include_monitor=False):
     """返回平台主链路任务；排除盘中刷新、代理、系统维护等旁路任务。"""
     excluded = {'daily_pipeline', 'realtime_refresh', 'proxy_refresh', 'fina_indicator_job', 'init_database', 'hist_cache_cleanup'}
     if not include_monitor:
-        excluded.update({'daily_pipeline_monitor', 'data_quality_monitor'})
+        excluded.update({'daily_pipeline_monitor', 'data_quality_monitor', 'agent_system_watch'})
     return [task for task in all_tasks() if task.key not in excluded]
 
 

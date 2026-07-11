@@ -114,6 +114,46 @@ TABLE_DAILY_MARKET_REPORT = {'name': 'daily_market_report', 'cn': '每日复盘�
                                          'report_path': {'type': VARCHAR(500, _COLLATE), 'cn': '报告路径', 'size': 260},
                                          'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
 
+TABLE_DAILY_SELECTION_REPORT = {'name': 'daily_selection_report', 'cn': '每日选股报告',
+                                'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 110},
+                                            'title': {'type': VARCHAR(200, _COLLATE), 'cn': '标题', 'size': 220},
+                                            'summary': {'type': VARCHAR(2000, _COLLATE), 'cn': '摘要', 'size': 260},
+                                            'candidate_count': {'type': BIGINT, 'cn': '候选数', 'size': 90},
+                                            'top_codes': {'type': VARCHAR(2000, _COLLATE), 'cn': '候选代码', 'size': 260},
+                                            'report_path': {'type': VARCHAR(500, _COLLATE), 'cn': '报告路径', 'size': 260},
+                                            'llm_enabled': {'type': SmallInteger, 'cn': 'LLM启用', 'size': 80},
+                                            'model': {'type': VARCHAR(100, _COLLATE), 'cn': '模型', 'size': 140},
+                                            'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
+
+TABLE_AGENT_INSIGHT = {'name': 'agent_insight', 'cn': 'Agent洞察',
+                       'columns': {'insight_id': {'type': VARCHAR(64, _COLLATE), 'cn': '洞察ID', 'size': 180},
+                                   'date': {'type': DATE, 'cn': '日期', 'size': 110},
+                                   'agent_key': {'type': VARCHAR(100, _COLLATE), 'cn': 'Agent', 'size': 160},
+                                   'level': {'type': VARCHAR(20, _COLLATE), 'cn': '级别', 'size': 80},
+                                   'category': {'type': VARCHAR(50, _COLLATE), 'cn': '分类', 'size': 120},
+                                   'title': {'type': VARCHAR(200, _COLLATE), 'cn': '标题', 'size': 220},
+                                   'message': {'type': VARCHAR(2000, _COLLATE), 'cn': '消息', 'size': 260},
+                                   'suggestion': {'type': VARCHAR(2000, _COLLATE), 'cn': '建议', 'size': 260},
+                                   'evidence_json': {'type': VARCHAR(4000, _COLLATE), 'cn': '证据JSON', 'size': 260},
+                                   'related_task_key': {'type': VARCHAR(100, _COLLATE), 'cn': '关联任务', 'size': 160},
+                                   'related_run_id': {'type': VARCHAR(64, _COLLATE), 'cn': '关联运行ID', 'size': 180},
+                                   'status': {'type': VARCHAR(20, _COLLATE), 'cn': '状态', 'size': 80},
+                                   'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
+
+TABLE_AGENT_RUN_LOG = {'name': 'agent_run_log', 'cn': 'Agent运行日志',
+                       'columns': {'run_id': {'type': VARCHAR(64, _COLLATE), 'cn': '运行ID', 'size': 180},
+                                   'date': {'type': DATE, 'cn': '日期', 'size': 110},
+                                   'agent_key': {'type': VARCHAR(100, _COLLATE), 'cn': 'Agent', 'size': 160},
+                                   'llm_enabled': {'type': SmallInteger, 'cn': 'LLM启用', 'size': 80},
+                                   'model': {'type': VARCHAR(100, _COLLATE), 'cn': '模型', 'size': 140},
+                                   'status': {'type': VARCHAR(20, _COLLATE), 'cn': '状态', 'size': 80},
+                                   'duration_seconds': {'type': FLOAT, 'cn': '耗时秒', 'size': 90},
+                                   'request_id': {'type': VARCHAR(100, _COLLATE), 'cn': '请求ID', 'size': 180},
+                                   'input_tokens': {'type': BIGINT, 'cn': '输入Token', 'size': 100},
+                                   'output_tokens': {'type': BIGINT, 'cn': '输出Token', 'size': 100},
+                                   'error_message': {'type': VARCHAR(2000, _COLLATE), 'cn': '错误', 'size': 260},
+                                   'created_at': {'type': DATETIME, 'cn': '创建时间', 'size': 160}}}
+
 TABLE_CN_ETF_SPOT = {'name': 'cn_etf_spot', 'cn': '每日ETF数据',
                      'columns': {'date': {'type': DATE, 'cn': '日期', 'size': 0},
                                  'code': {'type': VARCHAR(6, _COLLATE), 'cn': '代码', 'size': 60},

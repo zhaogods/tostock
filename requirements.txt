@@ -19,3 +19,4 @@ python_dateutil==2.9.0.post0
 akshare==1.18.64
 tushare==1.4.29
 portalocker>=2.0.0
+anthropic>=0.40.0

@@ -9,6 +9,7 @@
 """
 
 import datetime
+import json
 import logging
 import shutil
 import time
@@ -343,6 +344,120 @@ def get_recent_reports(limit=20):
     }
 
 
+def get_recent_selection_reports(limit=20):
+    """获取最近每日选股报告列表"""
+    try:
+        limit = max(1, min(100, int(limit or 20)))
+    except Exception:
+        limit = 20
+    if not _table_exists('daily_selection_report'):
+        return {'total': 0, 'reports': [], 'latest': None}
+
+    rows = _query(
+        """
+        SELECT `date`, `title`, `summary`, `candidate_count`, `top_codes`, `report_path`, `llm_enabled`, `model`, `created_at`
+        FROM `daily_selection_report`
+        ORDER BY `date` DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    reports = []
+    for row in rows:
+        report_date = _format_date(row.get('date'))[:10]
+        reports.append({
+            'date': report_date,
+            'title': row.get('title') or '每日选股报告',
+            'summary': row.get('summary') or '',
+            'candidate_count': _safe_int(row.get('candidate_count')),
+            'top_codes': row.get('top_codes') or '',
+            'report_path': row.get('report_path') or '',
+            'llm_enabled': bool(_safe_int(row.get('llm_enabled'))),
+            'model': row.get('model') or '',
+            'created_at': _format_date(row.get('created_at')),
+            'url': f'/instock/report/selection?date={report_date}' if report_date else '/instock/report/selection',
+        })
+    return {
+        'total': len(reports),
+        'latest': reports[0] if reports else None,
+        'reports': reports,
+    }
+
+
+def get_agent_insights(limit=20, status='', level=''):
+    """获取Agent洞察列表及摘要"""
+    try:
+        limit = max(1, min(100, int(limit or 20)))
+    except Exception:
+        limit = 20
+    result = {
+        'total': 0,
+        'summary': {'open': 0, 'critical': 0, 'warning': 0, 'info': 0},
+        'insights': [],
+        'latest': None,
+    }
+    if not _table_exists('agent_insight'):
+        return result
+
+    summary_rows = _query(
+        """
+        SELECT `status`, `level`, COUNT(*) AS `count`
+        FROM `agent_insight`
+        GROUP BY `status`, `level`
+        """
+    )
+    for row in summary_rows:
+        count = _safe_int(row.get('count'))
+        if row.get('status') == 'open':
+            result['summary']['open'] += count
+        level_key = row.get('level') or 'info'
+        if level_key in result['summary']:
+            result['summary'][level_key] += count
+
+    where = []
+    params = []
+    if status:
+        where.append("`status`=%s")
+        params.append(status)
+    if level:
+        where.append("`level`=%s")
+        params.append(level)
+    where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
+    params.append(limit)
+    rows = _query(
+        "SELECT `insight_id`,`date`,`agent_key`,`level`,`category`,`title`,`message`,`suggestion`,`evidence_json`,`related_task_key`,`related_run_id`,`status`,`created_at` "
+        f"FROM `agent_insight`{where_sql} ORDER BY `created_at` DESC LIMIT %s",
+        tuple(params),
+    )
+    insights = []
+    for row in rows:
+        evidence = {}
+        try:
+            evidence = json.loads(row.get('evidence_json') or '{}')
+        except Exception:
+            evidence = {}
+        item = {
+            'insight_id': row.get('insight_id') or '',
+            'date': _format_date(row.get('date'))[:10],
+            'agent_key': row.get('agent_key') or '',
+            'level': row.get('level') or 'info',
+            'category': row.get('category') or 'system',
+            'title': row.get('title') or '',
+            'message': row.get('message') or '',
+            'suggestion': row.get('suggestion') or '',
+            'evidence': evidence,
+            'related_task_key': row.get('related_task_key') or '',
+            'related_run_id': row.get('related_run_id') or '',
+            'status': row.get('status') or '',
+            'created_at': _format_date(row.get('created_at')),
+        }
+        insights.append(item)
+    result['total'] = len(insights)
+    result['latest'] = insights[0] if insights else None
+    result['insights'] = insights
+    return result
+
+
 def get_task_duration_stats(task_key: Optional[str] = None):
     """获取任务最近成功运行耗时统计"""
     if not _table_exists('system_task_run'):
@@ -586,4 +701,6 @@ def get_console_dashboard(query_date=None):
         'strategies': get_strategy_performance(7),
         'quality': get_data_quality_summary(date_value),
         'reports': get_recent_reports(5),
+        'selection_reports': get_recent_selection_reports(5),
+        'agent_insights': get_agent_insights(8, status='open'),
     }

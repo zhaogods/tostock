@@ -10,7 +10,9 @@
                 data_assets: null,
                 strategies: null,
                 quality: null,
-                reports: null
+                reports: null,
+                selection_reports: null,
+                agent_insights: null
             },
             status: null,
             pipeline: null,
@@ -278,6 +280,26 @@
         });
     };
 
+    App.refreshSelectionReports = function () {
+        return App.apiGet('/instock/console/api/selection-reports', {limit: 5}).done(function (resp) {
+            App.state.dashboard.selection_reports = resp.selection_reports || {reports: [], latest: null};
+            App.renderModule('dashboard');
+            App.renderModule('reports');
+        }).fail(function (xhr) {
+            App.toast(App.parseAjaxError(xhr, '选股报告列表刷新失败'), true);
+        });
+    };
+
+    App.refreshAgentInsights = function () {
+        return App.apiGet('/instock/console/api/agent/insights', {limit: 8, status: 'open'}).done(function (resp) {
+            App.state.dashboard.agent_insights = resp.agent_insights || {summary: {}, insights: []};
+            App.renderModule('dashboard');
+            App.renderModule('monitor');
+        }).fail(function (xhr) {
+            App.toast(App.parseAjaxError(xhr, 'Agent洞察刷新失败'), true);
+        });
+    };
+
     App.refreshTimeline = function () {
         var runsReq = App.apiGet('/instock/console/api/runs', {limit: 12});
         var noticesReq = App.apiGet('/instock/console/api/notices', {limit: 8});
@@ -332,7 +354,9 @@
             App.refreshAssets(),
             App.refreshStrategies(),
             App.refreshQuality(),
-            App.refreshReports()
+            App.refreshReports(),
+            App.refreshSelectionReports(),
+            App.refreshAgentInsights()
         ];
         App._waitAll(requests, function () {
             $('#refreshConsole').prop('disabled', false).html('<i class="fa fa-refresh"></i> 刷新');

@@ -112,6 +112,8 @@ def _normalize_query_date(query_date):
 def _get_asset_counts(asset: DataAsset, query_date: date) -> tuple[int, Optional[str]]:
     if not asset.table:
         return 0, None
+    if not mdb.checkTableIsExist(asset.table):
+        return 0, None
 
     try:
         sql = f"""
@@ -137,6 +139,8 @@ def get_asset_record_count(asset: DataAsset, query_date: date) -> int:
 def run_quality_checks(asset: DataAsset, query_date: date) -> tuple[float, list]:
     """运行质量检查规则，返回(质量分, 问题列表)"""
     if not asset.table or not asset.quality_checks:
+        return 100.0, []
+    if not mdb.checkTableIsExist(asset.table):
         return 100.0, []
 
     issues = []

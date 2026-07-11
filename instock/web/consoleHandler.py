@@ -181,6 +181,28 @@ class ConsoleReportsApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
             self.write_error_json('获取复盘报告列表失败', 500)
 
 
+class ConsoleSelectionReportsApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
+    def get(self):
+        try:
+            limit = int(self.get_argument('limit', default='20', strip=False))
+            self.write_json({'ok': True, 'selection_reports': console_service.get_recent_selection_reports(limit)})
+        except Exception as e:
+            logging.error(f"consoleHandler.ConsoleSelectionReportsApiHandler处理异常：{e}")
+            self.write_error_json('获取选股报告列表失败', 500)
+
+
+class ConsoleAgentInsightsApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
+    def get(self):
+        try:
+            limit = int(self.get_argument('limit', default='20', strip=False))
+            status = self.get_argument('status', default='', strip=False)
+            level = self.get_argument('level', default='', strip=False)
+            self.write_json({'ok': True, 'agent_insights': console_service.get_agent_insights(limit, status=status, level=level)})
+        except Exception as e:
+            logging.error(f"consoleHandler.ConsoleAgentInsightsApiHandler处理异常：{e}")
+            self.write_error_json('获取Agent洞察失败', 500)
+
+
 class ConsoleQualityApiHandler(webBase.BaseHandler, _JsonMixin, ABC):
     def get(self):
         try:

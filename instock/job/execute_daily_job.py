@@ -30,6 +30,7 @@ import strategy_data_daily_job as sdj
 import backtest_data_daily_job as bdj
 import backtest_rank_daily_job as brdj
 import daily_report_job as drj
+import selection_report_job as srj
 import klinepattern_data_daily_job as kdj
 import selection_data_daily_job as sddj
 import instock.lib.job_monitor as jm
@@ -77,6 +78,7 @@ def main():
 
     jm.run_job('backtest_rank_daily_job', brdj.main, run_date)
     jm.run_job('daily_report_job', drj.save_daily_market_report, run_date, run_date)
+    jm.run_job('selection_report_job', srj.save_daily_selection_report, run_date, run_date)
 
     logging.info("######## 完成任务, 使用时间: %s 秒 #######" % (time.time() - start))
 

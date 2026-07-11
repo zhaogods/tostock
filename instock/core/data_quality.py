@@ -9,6 +9,9 @@ SKIP_TABLES = {
     'job_run_log',
     'data_quality_log',
     'daily_market_report',
+    'daily_selection_report',
+    'agent_insight',
+    'agent_run_log',
 }
 
 PRICE_COLUMNS = {

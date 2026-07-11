@@ -224,6 +224,22 @@ ASSET_DAILY_REPORT = DataAsset(
     expected_ready_time='19:40',
 )
 
+# 每日选股报告
+ASSET_SELECTION_REPORT = DataAsset(
+    key='selection_report',
+    name='每日选股报告',
+    source='agent/report',
+    table=tbs.TABLE_DAILY_SELECTION_REPORT['name'],
+    update_frequency='daily',
+    expected_count=1,
+    quality_checks=[],
+    description='基于策略命中、资金流、技术信号和数据门禁生成的选股报告',
+    depends_on=['stock_daily', 'selection_data', 'stock_moneyflow', 'indicators_buy', 'patterns', 'backtest_rank'],
+    task_key='selection_report_rebuild',
+    page_table=tbs.TABLE_DAILY_SELECTION_REPORT['name'],
+    expected_ready_time='19:45',
+)
+
 # 所有数据资产
 _ALL_ASSETS = [
     ASSET_STOCK_DAILY,
@@ -241,6 +257,7 @@ _ALL_ASSETS = [
     ASSET_PATTERNS,
     ASSET_BACKTEST_RANK,
     ASSET_DAILY_REPORT,
+    ASSET_SELECTION_REPORT,
 ]
 
 _ASSETS_BY_KEY = {asset.key: asset for asset in _ALL_ASSETS}

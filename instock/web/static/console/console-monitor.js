@@ -58,6 +58,9 @@
             $('#strategyTable tbody').html(strategies.map(renderStrategyRow).join('') || '<tr><td colspan="6" class="empty-text">暂无策略表现数据</td></tr>');
 
             var health = dashboard.health || {};
+            var agentInsights = dashboard.agent_insights || {summary: {}, latest: null};
+            var agentSummary = agentInsights.summary || {};
+            var latestInsight = agentInsights.latest || {};
             var disk = health.disk || {};
             var dbOk = health.db_ok;
             var schedulerAlive = health.scheduler_alive;
@@ -69,6 +72,8 @@
                 + healthRow('磁盘使用', disk.used_percent == null ? '-' : (disk.used_percent || 0) + '%', disk.used_percent == null ? 'muted' : ((disk.used_percent || 0) > 90 ? 'critical' : (disk.used_percent || 0) > 80 ? 'warning' : 'healthy'), '剩余空间：' + (disk.free_gb || 0) + 'GB')
                 + healthRow('今日失败', health.failed_tasks_today || 0, health.failed_tasks_today ? 'critical' : 'healthy', '今日 system_task_run 中失败任务数量')
                 + healthRow('未确认通知', health.open_notices || 0, health.open_notices ? 'warning' : 'healthy', 'system_task_notice 中 open 状态通知')
+                + healthRow('Agent洞察', agentSummary.open || 0, agentSummary.critical ? 'critical' : (agentSummary.warning ? 'warning' : 'healthy'), 'Agent洞察 open 数量，最近：' + (latestInsight.title || '-'))
+                + healthRow('最近洞察', latestInsight.title || '-', latestInsight.level || 'muted', latestInsight.message || '最近Agent系统监看洞察')
             );
 
             var quality = dashboard.quality || {};

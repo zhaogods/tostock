@@ -33,6 +33,7 @@ class Application(tornado.web.Application):
         import instock.web.dataTableHandler as dataTableHandler
         import instock.web.dataIndicatorsHandler as dataIndicatorsHandler
         import instock.web.dailyReportHandler as dailyReportHandler
+        import instock.web.selectionReportHandler as selectionReportHandler
         import instock.web.consoleHandler as consoleHandler
         import instock.web.data_asset_handler as dataAssetHandler
         import instock.web.strategy_handler as strategyHandler
@@ -48,12 +49,16 @@ class Application(tornado.web.Application):
             (r"/instock/data", dataTableHandler.GetStockHtmlHandler),
             # 每日复盘正文。
             (r"/instock/report/daily", dailyReportHandler.DailyReportHandler),
+            # 每日选股报告正文。
+            (r"/instock/report/selection", selectionReportHandler.SelectionReportHandler),
             # 控制台。
             (r"/instock/console", consoleHandler.ConsoleHandler),
             (r"/instock/console/api/status", consoleHandler.ConsoleStatusApiHandler),
             (r"/instock/console/api/dashboard", consoleHandler.ConsoleDashboardApiHandler),
             (r"/instock/console/api/health", consoleHandler.ConsoleHealthApiHandler),
             (r"/instock/console/api/reports", consoleHandler.ConsoleReportsApiHandler),
+            (r"/instock/console/api/selection-reports", consoleHandler.ConsoleSelectionReportsApiHandler),
+            (r"/instock/console/api/agent/insights", consoleHandler.ConsoleAgentInsightsApiHandler),
             (r"/instock/console/api/quality", consoleHandler.ConsoleQualityApiHandler),
             (r"/instock/console/api/assets", consoleHandler.ConsoleAssetsApiHandler),
             (r"/instock/console/api/strategies", consoleHandler.ConsoleStrategiesApiHandler),

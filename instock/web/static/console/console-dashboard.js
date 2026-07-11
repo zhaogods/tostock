@@ -20,6 +20,9 @@
             var strategySummary = strategies.summary || {};
             var quality = dashboard.quality || {};
             var reports = dashboard.reports || {};
+            var selectionReports = dashboard.selection_reports || {};
+            var agentInsights = dashboard.agent_insights || {summary: {}};
+            var agentSummary = agentInsights.summary || {};
 
             $('#dashboardMetrics').html([
                 App.metric('运行中', summary.running || 0, '今日任务', '当前仍处于运行状态的系统任务数量'),
@@ -27,7 +30,7 @@
                 App.metric('失败', summary.failed || 0, '今日异常', '今日运行失败的系统任务数量'),
                 App.metric('数据健康', (assetSummary.healthy || 0) + '/' + (assetSummary.total || 0), '资产状态', '健康数据资产 / 全部数据资产'),
                 App.metric('策略样本', strategySummary.with_samples || 0, '有样本策略', '已有回测排行样本的策略数量'),
-                App.metric('通知', health.open_notices || 0, '未确认', '未确认或未解决的系统通知数量')
+                App.metric('Agent', agentSummary.open || 0, '待处理', 'Agent洞察中 open 状态的提示数量')
             ].join(''));
 
             var recentRows = (tasks.recent || []).slice(0, 6).map(function (item) {
@@ -48,12 +51,16 @@
 
             var best = strategySummary.best_strategy || {};
             var latestReport = reports.latest || {};
+            var latestSelectionReport = selectionReports.latest || {};
+            var latestInsight = agentInsights.latest || {};
             $('#dashboardBusiness').html(
                 row('资产完整度', App.formatPercent(assetSummary.avg_completeness || 0), assetSummary.critical ? 'warning' : 'healthy', '全部数据资产平均完整度')
                 + row('质量分', Number(assetSummary.avg_quality_score || 0).toFixed(1), quality.status === 'healthy' ? 'healthy' : quality.status || 'muted', '数据资产质量分与数据质量日志综合摘要')
                 + row('策略均值', (strategySummary.avg_return_10d || 0) + '%', (strategySummary.avg_return_10d || 0) >= 0 ? 'healthy' : 'warning', '有样本策略的 10 日平均收益')
                 + row('最佳策略', best.name || '-', 'info', '当前 10 日平均收益最高的策略')
-                + row('最新报告', latestReport.date || '-', latestReport.date ? 'info' : 'muted', latestReport.title || '最近每日复盘报告')
+                + row('最新复盘', latestReport.date || '-', latestReport.date ? 'info' : 'muted', latestReport.title || '最近每日复盘报告')
+                + row('最新选股', latestSelectionReport.date || '-', latestSelectionReport.date ? 'info' : 'muted', latestSelectionReport.title || '最近每日选股报告')
+                + row('Agent洞察', latestInsight.title || '-', latestInsight.level || 'muted', latestInsight.message || '最近Agent系统监看洞察')
             );
         }
     };

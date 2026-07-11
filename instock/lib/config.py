@@ -200,3 +200,31 @@ def get_web_config():
         'debug': get_bool('Tornado_DEBUG', False),
         'cookie_secret': _env('Tornado_COOKIE_SECRET', '027bb1b670eddf0392cdda8709268a17b58b7'),
     }
+
+
+def get_agent_llm_enabled(default=False):
+    return get_bool('AGENT_LLM_ENABLED', default)
+
+
+def get_agent_llm_provider(default='anthropic'):
+    return _env('AGENT_LLM_PROVIDER', default)
+
+
+def get_anthropic_api_key():
+    return _env('ANTHROPIC_API_KEY', '')
+
+
+def get_agent_llm_model(default='claude-opus-4-8'):
+    return _env('AGENT_LLM_MODEL', default)
+
+
+def get_agent_llm_max_tokens(default=4096):
+    return max(512, get_int('AGENT_LLM_MAX_TOKENS', default))
+
+
+def get_agent_llm_timeout_seconds(default=60):
+    return max(5, get_int('AGENT_LLM_TIMEOUT_SECONDS', default))
+
+
+def get_selection_report_top_n(default=20):
+    return max(1, min(100, get_int('SELECTION_REPORT_TOP_N', default)))
