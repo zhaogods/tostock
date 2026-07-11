@@ -47,49 +47,97 @@ def llm_enabled():
     return config.get_agent_llm_enabled(False)
 
 
-def complete_text(system_prompt, user_prompt):
-    """调用 Anthropic Messages API，返回统一结构；异常不会向上抛出。"""
-    if not config.get_agent_llm_enabled(False):
-        return _disabled_result('AGENT_LLM_ENABLED 未开启')
-    provider = (config.get_agent_llm_provider() or '').strip().lower()
-    if provider != 'anthropic':
-        return _disabled_result(f'暂不支持的 LLM provider：{provider}')
+def _complete_anthropic(system_prompt, user_prompt, model, timeout):
+    from anthropic import Anthropic
+
     api_key = config.get_anthropic_api_key()
     if not api_key:
         return _disabled_result('未配置 ANTHROPIC_API_KEY')
 
+    client = Anthropic(api_key=api_key, timeout=timeout)
+    response = client.messages.create(
+        model=model,
+        max_tokens=config.get_agent_llm_max_tokens(),
+        system=system_prompt,
+        messages=[{'role': 'user', 'content': user_prompt}],
+    )
+    text_parts = []
+    for block in getattr(response, 'content', []) or []:
+        block_text = getattr(block, 'text', '')
+        if block_text:
+            text_parts.append(block_text)
+    usage = getattr(response, 'usage', None)
+    return {
+        'ok': True,
+        'enabled': True,
+        'text': '\n'.join(text_parts).strip(),
+        'request_id': getattr(response, 'id', '') or '',
+        'model': model,
+        'input_tokens': int(getattr(usage, 'input_tokens', 0) or 0) if usage else 0,
+        'output_tokens': int(getattr(usage, 'output_tokens', 0) or 0) if usage else 0,
+        'duration_seconds': 0.0,
+        'error': '',
+    }
+
+
+def _complete_deepseek(system_prompt, user_prompt, model, timeout):
+    import requests as req
+
+    api_key = config.get_deepseek_api_key()
+    if not api_key:
+        return _disabled_result('未配置 DEEPSEEK_API_KEY')
+    base_url = config.get_deepseek_base_url()
+
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+    }
+    body = {
+        'model': model,
+        'messages': [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ],
+        'max_tokens': config.get_agent_llm_max_tokens(),
+        'stream': False,
+    }
+    resp = req.post(f'{base_url}/v1/chat/completions', headers=headers, json=body, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    choice = (data.get('choices') or [{}])[0]
+    usage = data.get('usage') or {}
+    return {
+        'ok': True,
+        'enabled': True,
+        'text': (choice.get('message') or {}).get('content', '').strip(),
+        'request_id': data.get('id', '') or '',
+        'model': data.get('model', model),
+        'input_tokens': usage.get('prompt_tokens', 0),
+        'output_tokens': usage.get('completion_tokens', 0),
+        'duration_seconds': 0.0,
+        'error': '',
+    }
+
+
+def complete_text(system_prompt, user_prompt):
+    """调用 LLM API，支持 anthropic / deepseek；异常不会向上抛出。"""
+    if not config.get_agent_llm_enabled(False):
+        return _disabled_result('AGENT_LLM_ENABLED 未开启')
+    provider = (config.get_agent_llm_provider() or '').strip().lower()
     model = config.get_agent_llm_model()
-    max_tokens = config.get_agent_llm_max_tokens()
     timeout = config.get_agent_llm_timeout_seconds()
     user_prompt = _short_text(user_prompt, _MAX_PROMPT_CHARS)
     start = time.time()
-    try:
-        from anthropic import Anthropic
 
-        client = Anthropic(api_key=api_key, timeout=timeout)
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system_prompt,
-            messages=[{'role': 'user', 'content': user_prompt}],
-        )
-        text_parts = []
-        for block in getattr(response, 'content', []) or []:
-            block_text = getattr(block, 'text', '')
-            if block_text:
-                text_parts.append(block_text)
-        usage = getattr(response, 'usage', None)
-        return {
-            'ok': True,
-            'enabled': True,
-            'text': '\n'.join(text_parts).strip(),
-            'request_id': getattr(response, 'id', '') or '',
-            'model': model,
-            'input_tokens': int(getattr(usage, 'input_tokens', 0) or 0) if usage else 0,
-            'output_tokens': int(getattr(usage, 'output_tokens', 0) or 0) if usage else 0,
-            'duration_seconds': round(time.time() - start, 3),
-            'error': '',
-        }
+    try:
+        if provider == 'anthropic':
+            result = _complete_anthropic(system_prompt, user_prompt, model, timeout)
+        elif provider == 'deepseek':
+            result = _complete_deepseek(system_prompt, user_prompt, model, timeout)
+        else:
+            return _disabled_result(f'暂不支持的 LLM provider：{provider}')
+        result['duration_seconds'] = round(time.time() - start, 3)
+        return result
     except Exception as exc:
         logging.error(f"llm_client.complete_text处理异常：{exc}")
         return {

@@ -214,6 +214,14 @@ def get_anthropic_api_key():
     return _env('ANTHROPIC_API_KEY', '')
 
 
+def get_deepseek_api_key():
+    return _env('DEEPSEEK_API_KEY', '')
+
+
+def get_deepseek_base_url(default='https://api.deepseek.com'):
+    return _env('DEEPSEEK_BASE_URL', default)
+
+
 def get_agent_llm_model(default='claude-opus-4-8'):
     return _env('AGENT_LLM_MODEL', default)
 
