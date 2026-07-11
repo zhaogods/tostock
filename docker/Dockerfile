@@ -60,6 +60,8 @@ RUN chmod 755 /data/tostock/instock/bin/run_*.sh && \
         > /var/spool/cron/crontabs/root && \
     chmod 600 /var/spool/cron/crontabs/root
 
+RUN mkdir -p /data/tostock/reports/selection
+
 COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod 755 /docker-entrypoint.sh
 
